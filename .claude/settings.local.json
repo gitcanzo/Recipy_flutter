@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(flutter pub get 2>&1)",
+      "PowerShell(flutter analyze 2>&1)",
+      "PowerShell(flutter emulators 2>&1)",
+      "PowerShell(Get-ChildItem \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\extras\\\\google\\\\Android_Emulator_Hypervisor_Driver\" -ErrorAction SilentlyContinue)",
+      "PowerShell(Confirm-SecureBootUEFI 2>&1)"
+    ]
+  }
+}
