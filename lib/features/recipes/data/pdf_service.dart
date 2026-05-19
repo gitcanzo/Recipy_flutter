@@ -6,10 +6,40 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import '../domain/ingredient_group.dart';
 import '../domain/recipe.dart';
 
 /// Provides a singleton [PdfService] instance for the app's lifetime.
 final pdfServiceProvider = Provider<PdfService>((ref) => PdfService());
+
+/// Localised string labels passed into [PdfService] by the UI layer.
+class PdfLabels {
+  final String sectionIngredients;
+  final String sectionSteps;
+  final String sectionNotes;
+  final String bookTitle;
+  final String generatedBy;
+  final String contents;
+  final String Function(int minutes) prepTime;
+  final String Function(int count) serves;
+  final String Function(int page, int total) pageOf;
+  final String Function(int count) recipeCount;
+  final String Function(String url) sourceLabel;
+
+  const PdfLabels({
+    required this.sectionIngredients,
+    required this.sectionSteps,
+    required this.sectionNotes,
+    required this.bookTitle,
+    required this.generatedBy,
+    required this.contents,
+    required this.prepTime,
+    required this.serves,
+    required this.pageOf,
+    required this.recipeCount,
+    required this.sourceLabel,
+  });
+}
 
 /// Generates PDF documents for individual recipes and full recipe books.
 ///
@@ -47,11 +77,11 @@ class PdfService {
   ///
   /// The dialog lets the user print, save as PDF, or share the file depending
   /// on the platform.
-  Future<void> previewRecipe(Recipe recipe) async {
+  Future<void> previewRecipe(Recipe recipe, {required PdfLabels labels}) async {
     await Printing.layoutPdf(
       name: _safeFilename(recipe.title),
       onLayout: (format) async {
-        final doc = await _buildRecipeDoc(recipe, format);
+        final doc = await _buildRecipeDoc(recipe, format, labels);
         return doc.save();
       },
     );
@@ -62,11 +92,11 @@ class PdfService {
   ///
   /// The book includes a cover page, a table of contents, and one page (or
   /// more for long recipes) per recipe.
-  Future<void> previewBook(List<Recipe> recipes) async {
+  Future<void> previewBook(List<Recipe> recipes, {required PdfLabels labels}) async {
     await Printing.layoutPdf(
       name: 'Recipy_Book',
       onLayout: (format) async {
-        final doc = await _buildBookDoc(recipes, format);
+        final doc = await _buildBookDoc(recipes, format, labels);
         return doc.save();
       },
     );
@@ -79,7 +109,7 @@ class PdfService {
   /// Builds a [pw.Document] containing one recipe formatted as a clean,
   /// printable recipe card.
   Future<pw.Document> _buildRecipeDoc(
-      Recipe recipe, PdfPageFormat format) async {
+      Recipe recipe, PdfPageFormat format, PdfLabels labels) async {
     final doc = pw.Document(
       title: recipe.title,
       author: 'Recipy',
@@ -98,7 +128,7 @@ class PdfService {
         pageFormat: format,
         margin: const pw.EdgeInsets.all(40),
         // Page footer with recipe title + page number.
-        footer: (ctx) => _buildFooter(ctx, recipe.title, font),
+        footer: (ctx) => _buildFooter(ctx, recipe.title, font, labels),
         build: (ctx) => [
           // Cover image (if available)
           if (coverImage != null) ...[
@@ -131,7 +161,7 @@ class PdfService {
           pw.SizedBox(height: 8),
 
           // Metadata row: prep time, servings
-          _buildMetaRow(recipe, font),
+          _buildMetaRow(recipe, font, labels),
           pw.SizedBox(height: 4),
 
           // Tags
@@ -149,7 +179,7 @@ class PdfService {
 
           // Source URL
           if (recipe.sourceUrl.isNotEmpty) ...[
-            pw.Text('Source: ${recipe.sourceUrl}',
+            pw.Text(labels.sourceLabel(recipe.sourceUrl),
                 style: pw.TextStyle(font: font, fontSize: 9, color: _textGrey)),
             pw.SizedBox(height: 4),
           ],
@@ -157,16 +187,30 @@ class PdfService {
           pw.Divider(color: _green, thickness: 1.5),
           pw.SizedBox(height: 8),
 
-          // Ingredients
-          _buildSectionHeader('Ingredients', fontBold),
-          pw.SizedBox(height: 6),
-          _buildIngredientList(recipe.ingredients, font),
+          // Ingredients — header glued to first ingredient, rest can split freely
+          ..._buildSectionWithContent(
+            header: _buildSectionHeader(labels.sectionIngredients, fontBold),
+            content: _buildIngredientGroupWidgets(recipe.ingredientGroups, font, fontBold),
+            spacing: 6,
+          ),
           pw.SizedBox(height: 16),
 
-          // Steps
-          _buildSectionHeader('Steps', fontBold),
-          pw.SizedBox(height: 6),
-          _buildStepList(recipe.steps, font, fontBold),
+          // Steps — header glued to first step, rest can split freely
+          ..._buildSectionWithContent(
+            header: _buildSectionHeader(labels.sectionSteps, fontBold),
+            content: _buildStepWidgets(recipe.steps, font, fontBold),
+            spacing: 6,
+          ),
+
+          // Notes
+          if (recipe.notes.isNotEmpty) ...[
+            pw.SizedBox(height: 16),
+            ..._buildSectionWithContent(
+              header: _buildSectionHeader(labels.sectionNotes, fontBold),
+              content: [_buildNotesText(recipe.notes, font)],
+              spacing: 6,
+            ),
+          ],
         ],
       ),
     );
@@ -189,7 +233,7 @@ class PdfService {
   /// precede the recipes, so recipe[i] starts on page 3 + sum of all previous
   /// recipe page counts.
   Future<pw.Document> _buildBookDoc(
-      List<Recipe> recipes, PdfPageFormat format) async {
+      List<Recipe> recipes, PdfPageFormat format, PdfLabels labels) async {
     final font = await PdfGoogleFonts.nunitoRegular();
     final fontBold = await PdfGoogleFonts.nunitoBold();
     final fontItalic = await PdfGoogleFonts.nunitoItalic();
@@ -212,7 +256,7 @@ class PdfService {
           pageFormat: format,
           margin: const pw.EdgeInsets.all(40),
           build: (ctx) => _buildRecipePageWidgets(
-              recipe, images[index], font, fontBold, fontItalic),
+              recipe, images[index], font, fontBold, fontItalic, labels),
         ),
       );
       await tmp.save(); // triggers layout; page list is now populated
@@ -240,7 +284,7 @@ class PdfService {
       pw.Page(
         pageFormat: format,
         margin: pw.EdgeInsets.zero,
-        build: (ctx) => _buildCoverPage(recipes.length, fontBold, font),
+        build: (ctx) => _buildCoverPage(recipes.length, fontBold, font, labels),
       ),
     );
 
@@ -250,7 +294,7 @@ class PdfService {
         pageFormat: format,
         margin: const pw.EdgeInsets.all(48),
         build: (ctx) =>
-            _buildTocPage(recipes, startPages, fontBold, font),
+            _buildTocPage(recipes, startPages, fontBold, font, labels),
       ),
     );
 
@@ -262,7 +306,7 @@ class PdfService {
         pw.MultiPage(
           pageFormat: format,
           margin: const pw.EdgeInsets.all(40),
-          footer: (ctx) => _buildFooter(ctx, recipe.title, font),
+          footer: (ctx) => _buildFooter(ctx, recipe.title, font, labels),
           build: (ctx) => [
             // pw.Anchor registers the named destination used by pw.Link in
             // the TOC so PDF viewers can jump directly to this recipe.
@@ -281,7 +325,7 @@ class PdfService {
             ),
             pw.SizedBox(height: 10),
             ..._buildRecipePageWidgets(
-                recipe, images[index], font, fontBold, fontItalic)
+                recipe, images[index], font, fontBold, fontItalic, labels)
                 // Drop the first widget because pw.Anchor already renders the
                 // title banner as its child above.
                 .skip(1),
@@ -303,6 +347,7 @@ class PdfService {
     pw.Font font,
     pw.Font fontBold,
     pw.Font fontItalic,
+    PdfLabels labels,
   ) {
     return [
       // Title banner (also used as pw.Anchor child in the final doc).
@@ -332,7 +377,7 @@ class PdfService {
         pw.SizedBox(height: 10),
       ],
 
-      _buildMetaRow(recipe, font),
+      _buildMetaRow(recipe, font, labels),
       pw.SizedBox(height: 4),
 
       if (recipe.tags.isNotEmpty) ...[
@@ -350,14 +395,27 @@ class PdfService {
       pw.Divider(color: _green),
       pw.SizedBox(height: 6),
 
-      _buildSectionHeader('Ingredients', fontBold),
-      pw.SizedBox(height: 4),
-      _buildIngredientList(recipe.ingredients, font),
+      ..._buildSectionWithContent(
+        header: _buildSectionHeader(labels.sectionIngredients, fontBold),
+        content: _buildIngredientGroupWidgets(recipe.ingredientGroups, font, fontBold),
+        spacing: 4,
+      ),
       pw.SizedBox(height: 12),
 
-      _buildSectionHeader('Steps', fontBold),
-      pw.SizedBox(height: 4),
-      _buildStepList(recipe.steps, font, fontBold),
+      ..._buildSectionWithContent(
+        header: _buildSectionHeader(labels.sectionSteps, fontBold),
+        content: _buildStepWidgets(recipe.steps, font, fontBold),
+        spacing: 4,
+      ),
+
+      if (recipe.notes.isNotEmpty) ...[
+        pw.SizedBox(height: 12),
+        ..._buildSectionWithContent(
+          header: _buildSectionHeader(labels.sectionNotes, fontBold),
+          content: [_buildNotesText(recipe.notes, font)],
+          spacing: 4,
+        ),
+      ],
     ];
   }
 
@@ -367,7 +425,7 @@ class PdfService {
 
   /// Full-bleed green cover page with the book title and recipe count.
   pw.Widget _buildCoverPage(
-      int recipeCount, pw.Font fontBold, pw.Font font) {
+      int recipeCount, pw.Font fontBold, pw.Font font, PdfLabels labels) {
     final date = DateFormat('MMMM yyyy').format(DateTime.now());
     return pw.Stack(
       children: [
@@ -394,7 +452,7 @@ class PdfService {
             mainAxisAlignment: pw.MainAxisAlignment.center,
             children: [
               pw.Text(
-                'My Recipe Book',
+                labels.bookTitle,
                 style: pw.TextStyle(
                   font: fontBold,
                   fontSize: 36,
@@ -409,7 +467,7 @@ class PdfService {
               ),
               pw.SizedBox(height: 12),
               pw.Text(
-                '$recipeCount ${recipeCount == 1 ? 'recipe' : 'recipes'}',
+                labels.recipeCount(recipeCount),
                 style: pw.TextStyle(
                     font: font, fontSize: 16, color: PdfColors.white),
               ),
@@ -421,7 +479,7 @@ class PdfService {
               ),
               pw.SizedBox(height: 8),
               pw.Text(
-                'Generated by Recipy',
+                labels.generatedBy,
                 style: pw.TextStyle(
                     font: font, fontSize: 10, color: _greenLight),
               ),
@@ -445,11 +503,12 @@ class PdfService {
     List<int> startPages,
     pw.Font fontBold,
     pw.Font font,
+    PdfLabels labels,
   ) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text('Contents',
+        pw.Text(labels.contents,
             style:
                 pw.TextStyle(font: fontBold, fontSize: 24, color: _green)),
         pw.SizedBox(height: 4),
@@ -477,19 +536,25 @@ class PdfService {
                           font: fontBold, fontSize: 11, color: _green),
                     ),
                   ),
-                  // Recipe title
+                  // Recipe title — does not expand; dots fill the gap
+                  pw.Text(recipe.title,
+                      style: pw.TextStyle(
+                          font: font, fontSize: 11, color: _green)),
+                  pw.SizedBox(width: 6),
+                  // Dot leader filling available space
                   pw.Expanded(
-                    child: pw.Text(recipe.title,
-                        style: pw.TextStyle(
-                            font: font, fontSize: 11, color: _green)),
+                    child: pw.Text(
+                      '.' * 120,
+                      maxLines: 1,
+                      overflow: pw.TextOverflow.clip,
+                      style: pw.TextStyle(
+                          font: font,
+                          fontSize: 11,
+                          color: _textGrey,
+                          letterSpacing: 1.5),
+                    ),
                   ),
-                  // Dotted line spacer
-                  pw.Expanded(
-                    child: pw.Divider(
-                        borderStyle: pw.BorderStyle.dashed,
-                        color: _textGrey,
-                        thickness: 0.5),
-                  ),
+                  pw.SizedBox(width: 6),
                   // Page number pre-computed in pass 1
                   pw.Text(
                     '$pageNum',
@@ -505,7 +570,50 @@ class PdfService {
     );
   }
 
-  /// Green section header (e.g. "Ingredients", "Steps").
+  /// Renders notes text with URLs turned into clickable pw.UrlLink spans.
+  pw.Widget _buildNotesText(String notes, pw.Font font) {
+    final urlRegex = RegExp(r'https?://[^\s]+', caseSensitive: false);
+    final spans = <pw.InlineSpan>[];
+    int cursor = 0;
+    for (final match in urlRegex.allMatches(notes)) {
+      if (match.start > cursor) {
+        spans.add(pw.TextSpan(
+          text: notes.substring(cursor, match.start),
+          style: pw.TextStyle(font: font, fontSize: 11, color: _textDark),
+        ));
+      }
+      final url = match.group(0)!;
+      spans.add(pw.WidgetSpan(
+        child: pw.UrlLink(
+          destination: url,
+          child: pw.Text(
+            url,
+            style: pw.TextStyle(
+              font: font,
+              fontSize: 11,
+              color: PdfColors.blue,
+              decoration: pw.TextDecoration.underline,
+            ),
+          ),
+        ),
+      ));
+      cursor = match.end;
+    }
+    if (cursor < notes.length) {
+      spans.add(pw.TextSpan(
+        text: notes.substring(cursor),
+        style: pw.TextStyle(font: font, fontSize: 11, color: _textDark),
+      ));
+    }
+    if (spans.isEmpty) {
+      return pw.Text(notes,
+          style: pw.TextStyle(font: font, fontSize: 11, color: _textDark));
+    }
+    return pw.RichText(text: pw.TextSpan(children: spans));
+  }
+
+  /// Green section header kept together with the next widget via pw.Wrap
+  /// to prevent the header appearing alone at the bottom of a page.
   pw.Widget _buildSectionHeader(String title, pw.Font fontBold) {
     return pw.Container(
       padding:
@@ -520,13 +628,13 @@ class PdfService {
   }
 
   /// Prep time and servings on one line with small icons replaced by labels.
-  pw.Widget _buildMetaRow(Recipe recipe, pw.Font font) {
+  pw.Widget _buildMetaRow(Recipe recipe, pw.Font font, PdfLabels labels) {
     final parts = <String>[];
     if (recipe.prepTimeMinutes > 0) {
-      parts.add('Prep: ${recipe.prepTimeMinutes} min');
+      parts.add(labels.prepTime(recipe.prepTimeMinutes));
     }
     if (recipe.servings > 0) {
-      parts.add('Serves: ${recipe.servings}');
+      parts.add(labels.serves(recipe.servings));
     }
     if (parts.isEmpty) return pw.SizedBox();
     return pw.Text(
@@ -559,81 +667,110 @@ class PdfService {
     );
   }
 
-  /// Bulleted ingredient list with alternating row shading for readability.
-  pw.Widget _buildIngredientList(List<String> ingredients, pw.Font font) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: ingredients.asMap().entries.map((entry) {
-        final isEven = entry.key.isEven;
-        return pw.Container(
-          color: isEven ? _greenLight : PdfColors.white,
-          padding: const pw.EdgeInsets.symmetric(
-              vertical: 3, horizontal: 6),
-          child: pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text('• ',
-                  style: pw.TextStyle(
-                      font: font, fontSize: 11, color: _green)),
-              pw.Expanded(
-                child: pw.Text(entry.value,
-                    style: pw.TextStyle(
-                        font: font,
-                        fontSize: 11,
-                        color: _textDark)),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
+  /// Returns a [pw.NewPage] guard followed by the header + first content item
+  /// and then the remaining items individually.
+  ///
+  /// The [pw.NewPage] with [freeSpace] triggers a page break when fewer than
+  /// 80pt remain on the current page — enough space for the header, spacing,
+  /// and at least one line of content.  This prevents the header from appearing
+  /// alone at the bottom of a page without locking all section content together.
+  List<pw.Widget> _buildSectionWithContent({
+    required pw.Widget header,
+    required List<pw.Widget> content,
+    required double spacing,
+  }) {
+    if (content.isEmpty) return [header];
+    return [
+      pw.NewPage(freeSpace: 80),
+      pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [header, pw.SizedBox(height: spacing), content.first],
+      ),
+      ...content.skip(1),
+    ];
   }
 
-  /// Numbered step list with green circle badges.
-  pw.Widget _buildStepList(
-      List<String> steps, pw.Font font, pw.Font fontBold) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: steps.asMap().entries.map((entry) {
-        return pw.Padding(
-          padding: const pw.EdgeInsets.only(bottom: 8),
+  /// Returns ingredient rows as a flat list of widgets (for use with
+  /// [_buildSectionWithContent] so each row can split across pages freely).
+  List<pw.Widget> _buildIngredientGroupWidgets(
+      List<IngredientGroup> groups, pw.Font font, pw.Font fontBold) {
+    final widgets = <pw.Widget>[];
+    int rowIndex = 0;
+
+    for (final group in groups) {
+      if (group.items.isEmpty) continue;
+      if (group.name.isNotEmpty) {
+        widgets.add(pw.Padding(
+          padding: const pw.EdgeInsets.only(top: 6, bottom: 2),
+          child: pw.Text(group.name,
+              style: pw.TextStyle(font: fontBold, fontSize: 11, color: _green)),
+        ));
+      }
+      for (final item in group.items) {
+        final isEven = rowIndex.isEven;
+        rowIndex++;
+        widgets.add(pw.Container(
+          color: isEven ? _greenLight : PdfColors.white,
+          padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 6),
           child: pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              // Numbered circle badge matching the app's detail screen style.
               pw.Container(
-                width: 22,
-                height: 22,
-                margin: const pw.EdgeInsets.only(right: 8, top: 1),
+                width: 6,
+                height: 6,
+                margin: const pw.EdgeInsets.only(top: 3, right: 8),
                 decoration: const pw.BoxDecoration(
-                  color: _green,
-                  shape: pw.BoxShape.circle,
-                ),
-                alignment: pw.Alignment.center,
-                child: pw.Text(
-                  '${entry.key + 1}',
-                  style: pw.TextStyle(
-                      font: fontBold,
-                      fontSize: 9,
-                      color: PdfColors.white),
-                ),
+                    color: _green, shape: pw.BoxShape.circle),
               ),
               pw.Expanded(
-                child: pw.Text(entry.value,
+                child: pw.Text(item,
                     style: pw.TextStyle(
                         font: font, fontSize: 11, color: _textDark)),
               ),
             ],
           ),
-        );
-      }).toList(),
-    );
+        ));
+      }
+    }
+    return widgets;
+  }
+
+  /// Returns step rows as a flat list of widgets (for use with
+  /// [_buildSectionWithContent] so each step can split across pages freely).
+  List<pw.Widget> _buildStepWidgets(
+      List<String> steps, pw.Font font, pw.Font fontBold) {
+    return steps.asMap().entries.map((entry) {
+      return pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: 8),
+        child: pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Container(
+              width: 22,
+              height: 22,
+              margin: const pw.EdgeInsets.only(right: 8, top: 1),
+              decoration: const pw.BoxDecoration(
+                  color: _green, shape: pw.BoxShape.circle),
+              alignment: pw.Alignment.center,
+              child: pw.Text('${entry.key + 1}',
+                  style: pw.TextStyle(
+                      font: fontBold, fontSize: 9, color: PdfColors.white)),
+            ),
+            pw.Expanded(
+              child: pw.Text(entry.value,
+                  style:
+                      pw.TextStyle(font: font, fontSize: 11, color: _textDark)),
+            ),
+          ],
+        ),
+      );
+    }).toList();
   }
 
   /// Footer shown at the bottom of every page: recipe title on the left,
   /// "page X of Y" on the right.
   pw.Widget _buildFooter(
-      pw.Context ctx, String title, pw.Font font) {
+      pw.Context ctx, String title, pw.Font font, PdfLabels labels) {
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
@@ -641,7 +778,7 @@ class PdfService {
             style:
                 pw.TextStyle(font: font, fontSize: 8, color: _textGrey)),
         pw.Text(
-          'Page ${ctx.pageNumber} of ${ctx.pagesCount}',
+          labels.pageOf(ctx.pageNumber, ctx.pagesCount),
           style: pw.TextStyle(font: font, fontSize: 8, color: _textGrey),
         ),
       ],

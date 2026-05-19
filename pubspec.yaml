@@ -2,13 +2,15 @@ name: recipy
 description: "A personal recipe manager with local storage and sharing."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 0.2.0+2
 
 environment:
   sdk: ^3.11.5
 
 dependencies:
   flutter:
+    sdk: flutter
+  flutter_localizations:
     sdk: flutter
 
   # State management
@@ -30,6 +32,7 @@ dependencies:
   # Export / import / sharing
   share_plus: ^10.1.4
   file_picker: ^8.3.7
+  receive_sharing_intent: ^1.8.0
 
   # PDF generation and printing
   pdf: ^3.11.1
@@ -43,6 +46,10 @@ dependencies:
   uuid: ^4.5.1
   intl: ^0.20.2
   cupertino_icons: ^1.0.8
+  google_fonts: ^8.1.0
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.7
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
@@ -53,5 +60,22 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  generate: true
   assets:
     - assets/images/
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/app_icon.png"
+  adaptive_icon_background: "#f4f6ee"
+  adaptive_icon_foreground: "assets/images/app_icon.png"
+
+flutter_native_splash:
+  color: "#f4f6ee"
+  image: assets/images/splash_logo.png
+  android: true
+  ios: false
+  android_12:
+    color: "#f4f6ee"
+    image: assets/images/splash_logo.png

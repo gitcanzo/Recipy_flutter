@@ -1,0 +1,345 @@
+{
+  "@@locale": "en",
+
+  "appTitle": "Recipy",
+  "@appTitle": { "description": "The name of the app" },
+
+  "noRecipesToExport": "No recipes to export.",
+  "@noRecipesToExport": { "description": "Snackbar when export is attempted with empty collection" },
+
+  "exportFailed": "Export failed: {error}",
+  "@exportFailed": { "description": "Snackbar when export throws", "placeholders": { "error": { "type": "String" } } },
+
+  "pdfFailed": "PDF failed: {error}",
+  "@pdfFailed": { "description": "Snackbar when PDF generation throws", "placeholders": { "error": { "type": "String" } } },
+
+  "shareFailed": "Share failed: {error}",
+  "@shareFailed": { "description": "Snackbar when sharing throws", "placeholders": { "error": { "type": "String" } } },
+
+  "importFailed": "Import failed: {error}",
+  "@importFailed": { "description": "Snackbar when file import throws", "placeholders": { "error": { "type": "String" } } },
+
+  "recipeImportedOne": "1 recipe imported.",
+  "@recipeImportedOne": { "description": "Snackbar after importing exactly 1 recipe" },
+
+  "recipesImportedMany": "{count} recipes imported.",
+  "@recipesImportedMany": { "description": "Snackbar after importing multiple recipes", "placeholders": { "count": { "type": "int" } } },
+
+  "newRecipeOption": "New recipe",
+  "@newRecipeOption": { "description": "Bottom sheet option to create a new recipe manually" },
+
+  "newRecipeOptionSubtitle": "Fill in the details manually",
+  "@newRecipeOptionSubtitle": { "description": "Subtitle for the new recipe option" },
+
+  "importFromUrlOption": "Import from URL",
+  "@importFromUrlOption": { "description": "Bottom sheet option to import from URL" },
+
+  "importFromUrlOptionSubtitle": "Paste a link to a recipe page",
+  "@importFromUrlOptionSubtitle": { "description": "Subtitle for the import from URL option" },
+
+  "moreActions": "More actions",
+  "@moreActions": { "description": "Tooltip for the overflow menu button" },
+
+  "exportCollection": "Export collection",
+  "@exportCollection": { "description": "Menu item to export all recipes as JSON" },
+
+  "importFromFile": "Import from file",
+  "@importFromFile": { "description": "Menu item to import recipes from a JSON file" },
+
+  "printRecipeBook": "Print recipe book",
+  "@printRecipeBook": { "description": "Menu item to print/PDF all recipes" },
+
+  "searchHint": "Search recipes or ingredients…",
+  "@searchHint": { "description": "Hint text inside the search bar" },
+
+  "recipeCountAll": "{count, plural, =1{1 recipe} other{{count} recipes}}",
+  "@recipeCountAll": { "description": "Recipe count label when no search is active", "placeholders": { "count": { "type": "num", "format": "compact" } } },
+
+  "recipeCountFiltered": "{filtered} of {total} recipes",
+  "@recipeCountFiltered": { "description": "Recipe count label when a search filter is active", "placeholders": { "filtered": { "type": "int" }, "total": { "type": "int" } } },
+
+  "couldNotLoadRecipes": "Could not load recipes: {error}",
+  "@couldNotLoadRecipes": { "description": "Error message when the recipe list fails to load", "placeholders": { "error": { "type": "String" } } },
+
+  "noRecipesYet": "No recipes yet",
+  "@noRecipesYet": { "description": "Empty state headline when the collection is empty" },
+
+  "noRecipesYetSub": "Tap the + button to add your first recipe or import one from a URL.",
+  "@noRecipesYetSub": { "description": "Empty state sub-message when the collection is empty" },
+
+  "noResultsFor": "No results for \"{query}\"",
+  "@noResultsFor": { "description": "Empty state headline when search yields nothing", "placeholders": { "query": { "type": "String" } } },
+
+  "noResultsForSub": "Try a different title, ingredient, or tag.",
+  "@noResultsForSub": { "description": "Empty state sub-message when search yields nothing" },
+
+  "addRecipeTooltip": "Add recipe",
+  "@addRecipeTooltip": { "description": "FAB tooltip" },
+
+  "deleteRecipeTitle": "Delete recipe?",
+  "@deleteRecipeTitle": { "description": "Confirmation dialog title" },
+
+  "deleteRecipeContent": "This cannot be undone.",
+  "@deleteRecipeContent": { "description": "Confirmation dialog body" },
+
+  "cancel": "Cancel",
+  "@cancel": { "description": "Generic cancel button label" },
+
+  "delete": "Delete",
+  "@delete": { "description": "Confirm delete button label" },
+
+  "open": "Open",
+  "@open": { "description": "Confirm open-link button label" },
+
+  "errorLoadingRecipe": "Error loading recipe: {error}",
+  "@errorLoadingRecipe": { "description": "Error shown on the detail screen when the recipe fails to load", "placeholders": { "error": { "type": "String" } } },
+
+  "recipeNotFound": "Recipe not found.",
+  "@recipeNotFound": { "description": "Shown when no recipe matches the given ID" },
+
+  "tooltipBack": "Back",
+  "@tooltipBack": { "description": "Tooltip for the back button in the app bar" },
+
+  "tooltipShare": "Share recipe",
+  "@tooltipShare": { "description": "Tooltip for the share button" },
+
+  "tooltipPdf": "Print / Save PDF",
+  "@tooltipPdf": { "description": "Tooltip for the PDF button" },
+
+  "tooltipEdit": "Edit recipe",
+  "@tooltipEdit": { "description": "Tooltip for the edit button" },
+
+  "tooltipDelete": "Delete recipe",
+  "@tooltipDelete": { "description": "Tooltip for the delete button" },
+
+  "sectionIngredients": "INGREDIENTS",
+  "@sectionIngredients": { "description": "Eyebrow label above the ingredients card" },
+
+  "sectionMethod": "METHOD",
+  "@sectionMethod": { "description": "Eyebrow label above the steps card" },
+
+  "sectionNotes": "NOTES",
+  "@sectionNotes": { "description": "Eyebrow label above the notes card" },
+
+  "openLinkTitle": "Open link?",
+  "@openLinkTitle": { "description": "Confirmation dialog title before opening a URL" },
+
+  "servingsLabel": "{count} servings",
+  "@servingsLabel": { "description": "Servings chip label on detail screen", "placeholders": { "count": { "type": "int" } } },
+
+  "prepTimeLabel": "{minutes} min",
+  "@prepTimeLabel": { "description": "Prep time chip label", "placeholders": { "minutes": { "type": "int" } } },
+
+  "newRecipeTitle": "New Recipe",
+  "@newRecipeTitle": { "description": "App bar title when creating a new recipe" },
+
+  "editRecipeTitle": "Edit Recipe",
+  "@editRecipeTitle": { "description": "App bar title when editing an existing recipe" },
+
+  "tooltipSave": "Save",
+  "@tooltipSave": { "description": "Tooltip for the save icon button in the edit screen app bar" },
+
+  "fieldTitle": "Title *",
+  "@fieldTitle": { "description": "Label for the title input field" },
+
+  "fieldDescription": "Description",
+  "@fieldDescription": { "description": "Label for the description input field" },
+
+  "fieldPrepTime": "Prep time (min)",
+  "@fieldPrepTime": { "description": "Label for the prep time input field" },
+
+  "fieldServings": "Servings",
+  "@fieldServings": { "description": "Label for the servings input field" },
+
+  "fieldTags": "Tags",
+  "@fieldTags": { "description": "Label for the tags chip input" },
+
+  "tagsHint": "e.g. vegetarian, quick…",
+  "@tagsHint": { "description": "Hint text inside the tag input field when no tags exist" },
+
+  "sectionIngredientsEdit": "Ingredients",
+  "@sectionIngredientsEdit": { "description": "Section title above the ingredients editor" },
+
+  "ingredientsReorderHint": "Drag groups or items to reorder. Tap + Group to add a named section.",
+  "@ingredientsReorderHint": { "description": "Helper text below the ingredients section title" },
+
+  "sectionStepsEdit": "Steps",
+  "@sectionStepsEdit": { "description": "Section title above the steps editor" },
+
+  "sectionNotesEdit": "Notes",
+  "@sectionNotesEdit": { "description": "Section title above the notes field" },
+
+  "notesHint": "Variations tried, sourcing tips, serving suggestions…",
+  "@notesHint": { "description": "Hint text inside the notes field" },
+
+  "buttonCreateRecipe": "Create Recipe",
+  "@buttonCreateRecipe": { "description": "Save button label when creating a new recipe" },
+
+  "buttonSaveChanges": "Save Changes",
+  "@buttonSaveChanges": { "description": "Save button label when editing an existing recipe" },
+
+  "buttonAddGroup": "Add group",
+  "@buttonAddGroup": { "description": "Button to add a new ingredient group" },
+
+  "buttonAddStep": "Add step",
+  "@buttonAddStep": { "description": "Button to add a new step" },
+
+  "buttonAddItem": "Add item",
+  "@buttonAddItem": { "description": "Button to add a new ingredient item" },
+
+  "addCoverPhoto": "Add cover photo",
+  "@addCoverPhoto": { "description": "Placeholder text inside the image picker area" },
+
+  "groupNameHint": "Group name (optional)",
+  "@groupNameHint": { "description": "Hint text inside the ingredient group name field" },
+
+  "tooltipRemoveGroup": "Remove group",
+  "@tooltipRemoveGroup": { "description": "Tooltip for the remove-group icon button" },
+
+  "tooltipRemoveItem": "Remove item",
+  "@tooltipRemoveItem": { "description": "Tooltip for the remove-ingredient icon button" },
+
+  "ingredientHint": "e.g. 200g pasta",
+  "@ingredientHint": { "description": "Hint text inside an ingredient field" },
+
+  "stepHint": "Describe this step…",
+  "@stepHint": { "description": "Hint text inside a step field" },
+
+  "tooltipRemoveStep": "Remove step",
+  "@tooltipRemoveStep": { "description": "Tooltip for the remove-step icon button" },
+
+  "duplicateRecipeName": "A recipe with this name already exists.",
+  "@duplicateRecipeName": { "description": "Snackbar shown when saving a recipe with a duplicate title" },
+
+  "saveFailed": "Save failed: {error}",
+  "@saveFailed": { "description": "Snackbar when the save operation throws", "placeholders": { "error": { "type": "String" } } },
+
+  "importFromUrlTitle": "Import from URL",
+  "@importFromUrlTitle": { "description": "App bar title for the URL import screen" },
+
+  "importFromUrlInstruction": "Paste the URL of a recipe page:",
+  "@importFromUrlInstruction": { "description": "Instruction label above the URL field" },
+
+  "urlHint": "https://…",
+  "@urlHint": { "description": "Hint text inside the URL input field" },
+
+  "buttonImport": "Import",
+  "@buttonImport": { "description": "Button label to trigger URL import" },
+
+  "urlInvalid": "Invalid URL",
+  "@urlInvalid": { "description": "Error when the pasted URL cannot be parsed" },
+
+  "urlUnreachable": "Could not reach the page: {error}",
+  "@urlUnreachable": { "description": "Error when the HTTP request fails", "placeholders": { "error": { "type": "String" } } },
+
+  "urlHttpError": "Page returned HTTP {code}",
+  "@urlHttpError": { "description": "Error when the server returns a non-200 status", "placeholders": { "code": { "type": "int" } } },
+
+  "urlParseError": "Could not extract recipe data from this page. Try filling in the details manually.",
+  "@urlParseError": { "description": "Error when no parser strategy succeeds" },
+
+  "cardPrepTime": "{minutes} min",
+  "@cardPrepTime": { "description": "Prep time label on the recipe card", "placeholders": { "minutes": { "type": "int" } } },
+
+  "cardServings": "{count} serv.",
+  "@cardServings": { "description": "Servings label on the recipe card", "placeholders": { "count": { "type": "int" } } },
+
+  "shareRecipeText": "Here's my recipe for {title}!",
+  "@shareRecipeText": { "description": "Share sheet text when sharing a single recipe", "placeholders": { "title": { "type": "String" } } },
+
+  "shareCollectionSubject": "My Recipy collection",
+  "@shareCollectionSubject": { "description": "Subject line when sharing the full collection" },
+
+  "shareCollectionText": "Here are all my recipes exported from Recipy!",
+  "@shareCollectionText": { "description": "Body text when sharing the full collection" },
+
+  "jsonNotRecipeData": "JSON file does not appear to contain recipe data.",
+  "@jsonNotRecipeData": { "description": "Error when imported JSON has no recognisable recipe structure" },
+
+  "jsonUnrecognisedFormat": "Unrecognised JSON format.",
+  "@jsonUnrecognisedFormat": { "description": "Error when imported JSON has an unexpected shape" },
+
+  "pdfSourceLabel": "Source: {url}",
+  "@pdfSourceLabel": { "description": "Source URL line in the PDF", "placeholders": { "url": { "type": "String" } } },
+
+  "pdfSectionIngredients": "Ingredients",
+  "@pdfSectionIngredients": { "description": "Section header in the PDF" },
+
+  "pdfSectionSteps": "Steps",
+  "@pdfSectionSteps": { "description": "Section header in the PDF" },
+
+  "pdfSectionNotes": "Notes",
+  "@pdfSectionNotes": { "description": "Notes section header in the PDF" },
+
+  "pdfBookTitle": "My Recipe Book",
+  "@pdfBookTitle": { "description": "Title on the PDF recipe book cover and header" },
+
+  "pdfRecipeCount": "{count, plural, =1{1 recipe} other{{count} recipes}}",
+  "@pdfRecipeCount": { "description": "Recipe count on the PDF cover", "placeholders": { "count": { "type": "num", "format": "compact" } } },
+
+  "pdfGeneratedBy": "Generated by Recipy",
+  "@pdfGeneratedBy": { "description": "Footer text on every PDF page" },
+
+  "pdfContents": "Contents",
+  "@pdfContents": { "description": "Table of contents header in the PDF book" },
+
+  "pdfPrepTime": "Prep: {minutes} min",
+  "@pdfPrepTime": { "description": "Prep time metadata in the PDF", "placeholders": { "minutes": { "type": "int" } } },
+
+  "pdfServes": "Serves: {count}",
+  "@pdfServes": { "description": "Servings metadata in the PDF", "placeholders": { "count": { "type": "int" } } },
+
+  "pdfPageOf": "Page {page} of {total}",
+  "@pdfPageOf": { "description": "Page number footer in the PDF", "placeholders": { "page": { "type": "int" }, "total": { "type": "int" } } },
+
+  "saveToDevice": "Save to device",
+  "@saveToDevice": { "description": "Export bottom sheet option to save the file locally" },
+
+  "saveToDeviceSubtitle": "Save the .recipy file to your Downloads folder",
+  "@saveToDeviceSubtitle": { "description": "Subtitle for the save to device option" },
+
+  "shareViaApp": "Share via…",
+  "@shareViaApp": { "description": "Export bottom sheet option to open the system share sheet" },
+
+  "shareViaAppSubtitle": "Send via email, Bluetooth, or another app",
+  "@shareViaAppSubtitle": { "description": "Subtitle for the share via app option" },
+
+  "savedToDevice": "Saved to {path}",
+  "@savedToDevice": { "description": "Snackbar shown after a file is saved to the device", "placeholders": { "path": { "type": "String" } } },
+
+  "importConfirmTitle": "Import recipe?",
+  "@importConfirmTitle": { "description": "Dialog title when a .recipy file is opened" },
+
+  "importConfirmContentOne": "Add \"{title}\" to your collection?",
+  "@importConfirmContentOne": { "description": "Dialog body when a single recipe is being imported", "placeholders": { "title": { "type": "String" } } },
+
+  "importConfirmContentMany": "Add {count} recipes to your collection?",
+  "@importConfirmContentMany": { "description": "Dialog body when multiple recipes are being imported", "placeholders": { "count": { "type": "int" } } },
+
+  "deleteMultipleRecipesContent": "Delete {count} recipes? This cannot be undone.",
+  "@deleteMultipleRecipesContent": { "description": "Confirmation dialog body when deleting multiple recipes", "placeholders": { "count": { "type": "int" } } },
+
+  "tooltipFavourite": "Mark as favourite",
+  "@tooltipFavourite": { "description": "Tooltip for the favourite toggle button" },
+
+  "tooltipUnfavourite": "Remove from favourites",
+  "@tooltipUnfavourite": { "description": "Tooltip for the unfavourite toggle button" },
+
+  "discardChangesTitle": "Discard changes?",
+  "@discardChangesTitle": { "description": "Dialog title when leaving edit screen with unsaved changes" },
+
+  "discardChangesContent": "You have unsaved changes. Are you sure you want to leave?",
+  "@discardChangesContent": { "description": "Dialog body when leaving edit screen with unsaved changes" },
+
+  "discard": "Discard",
+  "@discard": { "description": "Confirm discard button label" },
+
+  "filterFavourites": "Favourites",
+  "@filterFavourites": { "description": "Filter chip label to show only favourite recipes" },
+
+  "noFavouritesYet": "No favourites yet",
+  "@noFavouritesYet": { "description": "Empty state headline when the favourites filter is on but no recipes are starred" },
+
+  "noFavouritesYetSub": "Tap the heart on any recipe to mark it as a favourite.",
+  "@noFavouritesYetSub": { "description": "Empty state sub-message for the empty favourites filter" }
+}

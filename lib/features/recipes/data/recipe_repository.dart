@@ -14,6 +14,12 @@ final recipeRepositoryProvider = Provider<RecipeRepository>(
   (ref) => RecipeRepository(),
 );
 
+/// Holds recipes parsed from an incoming file intent that are waiting for the
+/// user to confirm before being imported.  Set by main.dart, consumed and
+/// cleared by RecipeListScreen.
+final pendingImportProvider =
+    StateProvider<List<Recipe>>((ref) => const []);
+
 /// Exposes the recipe list as a reactive [AsyncValue].
 ///
 /// Backed by [RecipeListNotifier] so any write (add / update / delete /
@@ -80,6 +86,16 @@ class RecipeListNotifier extends StateNotifier<AsyncValue<List<Recipe>>> {
     await _repo.insertMany(recipes);
     await _refresh();
   }
+
+  /// Toggles the favourite flag on a recipe and refreshes the list.
+  Future<void> toggleFavourite(int id, bool newValue) async {
+    await _repo.setFavourite(id, newValue);
+    await _refresh();
+  }
+
+  /// Re-queries the database and emits the latest list.  Call this when the
+  /// app returns to the foreground or after an out-of-band database write.
+  Future<void> refresh() => _refresh();
 }
 
 // ---------------------------------------------------------------------------
@@ -111,7 +127,7 @@ class RecipeRepository {
 
     return openDatabase(
       dbPath,
-      version: 1,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE recipes (
@@ -125,10 +141,22 @@ class RecipeRepository {
             tags        TEXT    NOT NULL DEFAULT '[]',
             imagePath   TEXT    NOT NULL DEFAULT '',
             sourceUrl   TEXT    NOT NULL DEFAULT '',
+            notes       TEXT    NOT NULL DEFAULT '',
+            isFavourite INTEGER NOT NULL DEFAULT 0,
             createdAt   TEXT    NOT NULL,
             updatedAt   TEXT    NOT NULL
           )
         ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute(
+              "ALTER TABLE recipes ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion < 3) {
+          await db.execute(
+              "ALTER TABLE recipes ADD COLUMN isFavourite INTEGER NOT NULL DEFAULT 0");
+        }
       },
     );
   }
@@ -140,7 +168,7 @@ class RecipeRepository {
   /// Returns all recipes ordered by most recently updated first.
   Future<List<Recipe>> getAllRecipes() async {
     final db = await _db;
-    final rows = await db.query('recipes', orderBy: 'updatedAt DESC');
+    final rows = await db.rawQuery('SELECT * FROM recipes ORDER BY LOWER(title) ASC');
     return rows.map(Recipe.fromSqlite).toList();
   }
 
@@ -197,6 +225,17 @@ class RecipeRepository {
     final map = recipe.toSqlite();
     map['updatedAt'] = DateTime.now().toIso8601String();
     await db.update('recipes', map, where: 'id = ?', whereArgs: [recipe.id]);
+  }
+
+  /// Updates only the isFavourite flag for the recipe with [id].
+  Future<void> setFavourite(int id, bool value) async {
+    final db = await _db;
+    await db.update(
+      'recipes',
+      {'isFavourite': value ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   /// Permanently deletes the recipe row with the given [id].

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -11,95 +12,107 @@ import '../domain/recipe.dart';
 final shareImportServiceProvider =
     Provider<ShareImportService>((ref) => ShareImportService());
 
-/// Handles exporting recipes to JSON files and importing them back.
+/// Handles exporting recipes to `.recipy` files and importing them back.
 ///
-/// Two export modes are supported:
-/// - **Single recipe** — exports one recipe as `<title>.recipy.json` and
-///   triggers the system share sheet so the user can send it via any app.
-/// - **Full collection** — exports all recipes into one
-///   `recipy_collection.json` file (same share sheet).
+/// Export has two modes per operation:
+/// - **Save to device** — writes the file to the user-visible Downloads folder
+///   (Android) or shows a native save dialog (Windows/macOS/Linux).
+/// - **Share** — writes a temp file and opens the system share sheet.
 ///
-/// Import reads any `.json` file the user picks and inserts the recipes
-/// into the local SQLite database via the caller's [RecipeListNotifier].
+/// Import reads any `.recipy` (or legacy `.json`) file the user picks.
 class ShareImportService {
   // ---------------------------------------------------------------------------
-  // Export — single recipe
+  // Export — single recipe — save to device
   // ---------------------------------------------------------------------------
 
-  /// Serialises [recipe] to JSON, writes it to a temporary file, and opens
-  /// the system share sheet so the user can send it via any app
-  /// (WhatsApp, email, AirDrop, etc.).
+  /// Saves [recipe] as `<title>.recipy` to a user-visible location.
   ///
-  /// The file is written to the system temp directory so it is cleaned up
-  /// automatically by the OS and does not accumulate on the device.
-  Future<void> shareRecipe(Recipe recipe) async {
+  /// Returns the saved path, or null if the user cancelled the save dialog.
+  Future<String?> saveRecipeToDevice(Recipe recipe) async {
+    final json = jsonEncode(recipe.toJson());
+    final filename = '${_safeFilename(recipe.title)}.recipy';
+    return _saveToDevice(filename: filename, content: json);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Export — single recipe — share sheet
+  // ---------------------------------------------------------------------------
+
+  /// Serialises [recipe] to a temp `.recipy` file and opens the system share
+  /// sheet so the user can send it via email, Bluetooth, etc.
+  Future<void> shareRecipe(Recipe recipe, {required String shareText}) async {
     final json = jsonEncode(recipe.toJson());
     final file = await _writeTempFile(
-      // Sanitise the title for use as a filename.
-      filename: '${_safeFilename(recipe.title)}.recipy.json',
+      filename: '${_safeFilename(recipe.title)}.recipy',
       content: json,
     );
     await Share.shareXFiles(
-      [XFile(file.path, mimeType: 'application/json')],
+      [XFile(file.path, mimeType: 'application/x-recipy')],
       subject: recipe.title,
-      text: 'Here\'s my recipe for ${recipe.title}!',
+      text: shareText,
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Export — full collection
+  // Export — full collection — save to device
   // ---------------------------------------------------------------------------
 
-  /// Serialises [recipes] to a JSON array and shares the resulting file.
-  ///
-  /// The exported format is a top-level object with a `recipes` key so the
-  /// file is self-describing and easy to extend in future versions:
-  /// ```json
-  /// { "version": 1, "recipes": [ { … }, … ] }
-  /// ```
-  Future<void> shareCollection(List<Recipe> recipes) async {
+  /// Saves all [recipes] as `recipy_collection.recipy` to a user-visible
+  /// location.  Returns the saved path, or null if cancelled.
+  Future<String?> saveCollectionToDevice(List<Recipe> recipes) async {
+    final payload = {
+      'version': 1,
+      'recipes': recipes.map((r) => r.toJson()).toList(),
+    };
+    final json = const JsonEncoder.withIndent('  ').convert(payload);
+    return _saveToDevice(
+        filename: 'recipy_collection.recipy', content: json);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Export — full collection — share sheet
+  // ---------------------------------------------------------------------------
+
+  /// Serialises [recipes] to a temp `.recipy` file and opens the system share
+  /// sheet.
+  Future<void> shareCollection(
+    List<Recipe> recipes, {
+    required String subject,
+    required String shareText,
+  }) async {
     final payload = {
       'version': 1,
       'recipes': recipes.map((r) => r.toJson()).toList(),
     };
     final json = const JsonEncoder.withIndent('  ').convert(payload);
     final file = await _writeTempFile(
-      filename: 'recipy_collection.json',
+      filename: 'recipy_collection.recipy',
       content: json,
     );
     await Share.shareXFiles(
-      [XFile(file.path, mimeType: 'application/json')],
-      subject: 'My Recipy collection',
-      text: 'Here are all my recipes exported from Recipy!',
+      [XFile(file.path, mimeType: 'application/x-recipy')],
+      subject: subject,
+      text: shareText,
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Import
+  // Import — file picker
   // ---------------------------------------------------------------------------
 
-  /// Opens the system file picker filtered to JSON files, reads the selected
-  /// file, and returns the parsed list of [Recipe] objects.
+  /// Opens the system file picker filtered to `.recipy` and `.json` files,
+  /// reads the selected file, and returns the parsed list of [Recipe] objects.
   ///
-  /// Supports both single-recipe files (produced by [shareRecipe]) and
-  /// collection files (produced by [shareCollection]).
-  ///
-  /// Returns an empty list if:
-  /// - The user cancels the picker.
-  /// - The file cannot be read or parsed.
-  ///
-  /// Throws a descriptive [FormatException] if the JSON is structurally valid
-  /// but does not contain recognisable recipe data.
+  /// Returns an empty list if the user cancels or the file is unreadable.
+  /// Throws a [FormatException] with a sentinel message when the content is
+  /// structurally valid JSON but not recognisable as recipe data.
   Future<List<Recipe>> pickAndImport() async {
-    // Open the OS file picker.  On Android this shows the document browser;
-    // on iOS/macOS the Files app; on Windows/Linux a native dialog.
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['json'],
+      allowedExtensions: ['recipy', 'json'],
       allowMultiple: false,
     );
 
-    // User cancelled the picker.
     if (result == null || result.files.isEmpty) return [];
 
     final path = result.files.single.path;
@@ -109,49 +122,57 @@ class ShareImportService {
     return _parseImportContent(content);
   }
 
+  /// Parses a raw JSON string from a `.recipy` or `.json` import file.
+  ///
+  /// Called both from [pickAndImport] and from the intent-handler in main.dart
+  /// when the app is opened by tapping a `.recipy` file attachment.
+  List<Recipe> parseContent(String content) => _parseImportContent(content);
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  /// Parses the raw JSON string from an import file.
+  /// Saves [content] to [filename].
   ///
-  /// Handles three formats:
-  /// 1. Collection file: `{ "version": 1, "recipes": [ … ] }`
-  /// 2. Single-recipe object: `{ "title": "…", … }`
-  /// 3. Bare array (legacy / third-party): `[ { "title": "…" }, … ]`
-  List<Recipe> _parseImportContent(String content) {
-    final dynamic decoded = jsonDecode(content);
-
-    if (decoded is Map<String, dynamic>) {
-      if (decoded.containsKey('recipes')) {
-        // Collection format.
-        final list = decoded['recipes'] as List<dynamic>;
-        return list
-            .whereType<Map<String, dynamic>>()
-            .map(Recipe.fromJson)
-            .toList();
+  /// On Android writes to the public Downloads directory so the file is visible
+  /// in the Files app without any storage permission on API 29+.
+  /// On desktop (Windows/macOS/Linux) shows a native save-file dialog.
+  /// Returns the saved path, or null if the user cancelled (desktop only).
+  Future<String?> _saveToDevice({
+    required String filename,
+    required String content,
+  }) async {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      // On Android, getExternalStorageDirectory points to the app-scoped
+      // external storage.  For a user-visible Downloads folder we construct
+      // the standard path directly — no permission needed on API 29+.
+      final dir = Directory('/storage/emulated/0/Download');
+      if (!dir.existsSync()) {
+        // Fallback to app documents if the standard path is unavailable.
+        final appDir = await getApplicationDocumentsDirectory();
+        final file = File(p.join(appDir.path, filename));
+        await file.writeAsString(content, flush: true);
+        return file.path;
       }
-      // Single recipe object.
-      if (decoded.containsKey('title')) {
-        return [Recipe.fromJson(decoded)];
-      }
-      throw const FormatException(
-          'JSON file does not appear to contain recipe data.');
+      final file = File(p.join(dir.path, filename));
+      await file.writeAsString(content, flush: true);
+      return file.path;
     }
 
-    if (decoded is List<dynamic>) {
-      // Bare array of recipe objects.
-      return decoded
-          .whereType<Map<String, dynamic>>()
-          .map(Recipe.fromJson)
-          .toList();
-    }
-
-    throw const FormatException('Unrecognised JSON format.');
+    // Desktop: show a native save dialog via file_picker.
+    final savePath = await FilePicker.platform.saveFile(
+      dialogTitle: 'Save recipe',
+      fileName: filename,
+      type: FileType.custom,
+      allowedExtensions: ['recipy'],
+    );
+    if (savePath == null) return null;
+    final file = File(savePath);
+    await file.writeAsString(content, flush: true);
+    return savePath;
   }
 
-  /// Writes [content] to a file named [filename] in the system temp directory
-  /// and returns the resulting [File].
+  /// Writes [content] to a file named [filename] in the system temp directory.
   Future<File> _writeTempFile({
     required String filename,
     required String content,
@@ -162,8 +183,33 @@ class ShareImportService {
     return file;
   }
 
-  /// Converts a recipe title into a safe filename by replacing characters
-  /// that are invalid in file names with underscores.
+  List<Recipe> _parseImportContent(String content) {
+    final dynamic decoded = jsonDecode(content);
+
+    if (decoded is Map<String, dynamic>) {
+      if (decoded.containsKey('recipes')) {
+        final list = decoded['recipes'] as List<dynamic>;
+        return list
+            .whereType<Map<String, dynamic>>()
+            .map(Recipe.fromJson)
+            .toList();
+      }
+      if (decoded.containsKey('title')) {
+        return [Recipe.fromJson(decoded)];
+      }
+      throw const FormatException('json_not_recipe_data');
+    }
+
+    if (decoded is List<dynamic>) {
+      return decoded
+          .whereType<Map<String, dynamic>>()
+          .map(Recipe.fromJson)
+          .toList();
+    }
+
+    throw const FormatException('json_unrecognised_format');
+  }
+
   String _safeFilename(String title) {
     return title
         .trim()
