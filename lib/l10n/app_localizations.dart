@@ -781,6 +781,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tap the heart on any recipe to mark it as a favourite.'**
   String get noFavouritesYetSub;
+
+  /// Snackbar when exactly 1 recipe was skipped during import due to a duplicate title
+  ///
+  /// In en, this message translates to:
+  /// **'1 recipe skipped (duplicate name).'**
+  String get importSkippedOne;
+
+  /// Snackbar when multiple recipes were skipped during import due to duplicate titles
+  ///
+  /// In en, this message translates to:
+  /// **'{count} recipes skipped (duplicate names).'**
+  String importSkippedMany(int count);
+
+  /// Snackbar when every recipe in an import file is a duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing imported — all recipes already exist.'**
+  String get importAllDuplicates;
 }
 
 class _AppLocalizationsDelegate

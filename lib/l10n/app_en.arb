@@ -341,5 +341,14 @@
   "@noFavouritesYet": { "description": "Empty state headline when the favourites filter is on but no recipes are starred" },
 
   "noFavouritesYetSub": "Tap the heart on any recipe to mark it as a favourite.",
-  "@noFavouritesYetSub": { "description": "Empty state sub-message for the empty favourites filter" }
+  "@noFavouritesYetSub": { "description": "Empty state sub-message for the empty favourites filter" },
+
+  "importSkippedOne": "1 recipe skipped (duplicate name).",
+  "@importSkippedOne": { "description": "Snackbar when exactly 1 recipe was skipped during import due to a duplicate title" },
+
+  "importSkippedMany": "{count} recipes skipped (duplicate names).",
+  "@importSkippedMany": { "description": "Snackbar when multiple recipes were skipped during import due to duplicate titles", "placeholders": { "count": { "type": "int" } } },
+
+  "importAllDuplicates": "Nothing imported — all recipes already exist.",
+  "@importAllDuplicates": { "description": "Snackbar when every recipe in an import file is a duplicate" }
 }

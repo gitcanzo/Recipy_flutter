@@ -260,28 +260,84 @@ class _RecipeListScreenState extends ConsumerState<RecipeListScreen>
     }
   }
 
-  /// Opens the file picker, parses the selected JSON, and inserts the recipes.
+  /// Filters [incoming] against [existing], returning only recipes whose title
+  /// (case-insensitive) is not already present.  [skipped] receives the count
+  /// of duplicates that were removed.
+  ({List<Recipe> toImport, int skipped}) _deduplicateImport(
+    List<Recipe> incoming,
+    List<Recipe> existing,
+  ) {
+    final existingTitles =
+        existing.map((r) => r.title.toLowerCase()).toSet();
+    final toImport =
+        incoming.where((r) => !existingTitles.contains(r.title.toLowerCase())).toList();
+    return (toImport: toImport, skipped: incoming.length - toImport.length);
+  }
+
+  /// Shows the import confirmation dialog for [parsed] recipes, then
+  /// deduplicates and inserts on confirmation.  Used by both the in-app file
+  /// picker and the intent-based import path.
+  Future<void> _confirmAndImport(List<Recipe> parsed) async {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.importConfirmTitle),
+        content: Text(
+          parsed.length == 1
+              ? l10n.importConfirmContentOne(parsed.first.title)
+              : l10n.importConfirmContentMany(parsed.length),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.buttonImport),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final existing = ref.read(recipeListProvider).valueOrNull ?? [];
+    final (:toImport, :skipped) = _deduplicateImport(parsed, existing);
+
+    if (toImport.isNotEmpty) {
+      await ref.read(recipeListProvider.notifier).importRecipes(toImport);
+    }
+
+    final String msg;
+    if (toImport.isEmpty) {
+      msg = l10n.importAllDuplicates;
+    } else {
+      final importedMsg = toImport.length == 1
+          ? l10n.recipeImportedOne
+          : l10n.recipesImportedMany(toImport.length);
+      final skippedMsg = skipped == 1
+          ? l10n.importSkippedOne
+          : skipped > 1
+              ? l10n.importSkippedMany(skipped)
+              : null;
+      msg = skippedMsg != null ? '$importedMsg $skippedMsg' : importedMsg;
+    }
+    messenger.showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  /// Opens the file picker, parses the selected file, then shows a
+  /// confirmation dialog before inserting.
   Future<void> _import() async {
     final l10n = AppLocalizations.of(context)!;
     try {
-      final service = ref.read(shareImportServiceProvider);
-      final imported = await service.pickAndImport();
-
-      if (imported.isEmpty) return;
-
-      await ref.read(recipeListProvider.notifier).importRecipes(imported);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              imported.length == 1
-                  ? l10n.recipeImportedOne
-                  : l10n.recipesImportedMany(imported.length),
-            ),
-          ),
-        );
-      }
+      final parsed = await ref.read(shareImportServiceProvider).pickAndImport();
+      if (parsed.isEmpty) return;
+      await _confirmAndImport(parsed);
     } catch (e) {
       if (mounted) {
         final msg = e is FormatException && e.message == 'json_not_recipe_data'
@@ -340,34 +396,8 @@ class _RecipeListScreenState extends ConsumerState<RecipeListScreen>
     ref.listen<List<Recipe>>(pendingImportProvider, (previous, recipes) {
       if (recipes.isEmpty) return;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        final l10n = AppLocalizations.of(context)!;
-        final confirm = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: Text(l10n.importConfirmTitle),
-            content: Text(
-              recipes.length == 1
-                  ? l10n.importConfirmContentOne(recipes.first.title)
-                  : l10n.importConfirmContentMany(recipes.length),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: Text(l10n.cancel),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: Text(l10n.buttonImport),
-              ),
-            ],
-          ),
-        );
-        // Clear the pending list regardless of the user's choice.
         ref.read(pendingImportProvider.notifier).state = const [];
-        if (confirm == true) {
-          await ref.read(recipeListProvider.notifier).importRecipes(recipes);
-        }
+        await _confirmAndImport(recipes);
       });
     });
 

@@ -438,4 +438,16 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get noFavouritesYetSub =>
       'Tocca il cuore su una ricetta per aggiungerla ai preferiti.';
+
+  @override
+  String get importSkippedOne => '1 ricetta saltata (nome duplicato).';
+
+  @override
+  String importSkippedMany(int count) {
+    return '$count ricette saltate (nomi duplicati).';
+  }
+
+  @override
+  String get importAllDuplicates =>
+      'Nessuna ricetta importata — esistono già tutte.';
 }

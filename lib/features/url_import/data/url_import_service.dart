@@ -5,6 +5,7 @@ import 'package:html/parser.dart' as html_parser;
 import 'package:html/dom.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import '../../../shared/utils/image_utils.dart';
 import '../../recipes/domain/ingredient_group.dart';
 import '../../recipes/domain/recipe.dart';
 
@@ -309,18 +310,17 @@ class UrlImportService {
           .timeout(const Duration(seconds: 15));
       if (response.statusCode != 200) return '';
 
-      // Derive a file extension from the URL path; default to .jpg.
-      final urlPath = uri.path;
-      final ext = p.extension(urlPath).isNotEmpty ? p.extension(urlPath) : '.jpg';
-
-      // Save into the same directory used by the image picker in the edit screen.
+      // Write raw bytes to a temp file, then compress into recipe_images.
       final dir = await getApplicationDocumentsDirectory();
       final imagesDir = Directory(p.join(dir.path, 'recipe_images'));
       if (!imagesDir.existsSync()) imagesDir.createSync(recursive: true);
-      final filename = '${DateTime.now().millisecondsSinceEpoch}$ext';
-      final file = File(p.join(imagesDir.path, filename));
-      await file.writeAsBytes(response.bodyBytes);
-      return file.path;
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      final tmp = File(p.join(imagesDir.path, 'tmp_$ts.jpg'));
+      await tmp.writeAsBytes(response.bodyBytes);
+      final destPath = p.join(imagesDir.path, '$ts.jpg');
+      final compressed = await compressImage(tmp, destPath);
+      await tmp.delete();
+      return compressed.path;
     } catch (_) {
       // Image download failure is non-fatal — the user can add a photo later.
       return '';

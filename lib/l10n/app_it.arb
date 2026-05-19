@@ -119,5 +119,9 @@
 
   "filterFavourites": "Preferiti",
   "noFavouritesYet": "Nessun preferito",
-  "noFavouritesYetSub": "Tocca il cuore su una ricetta per aggiungerla ai preferiti."
+  "noFavouritesYetSub": "Tocca il cuore su una ricetta per aggiungerla ai preferiti.",
+
+  "importSkippedOne": "1 ricetta saltata (nome duplicato).",
+  "importSkippedMany": "{count} ricette saltate (nomi duplicati).",
+  "importAllDuplicates": "Nessuna ricetta importata — esistono già tutte."
 }

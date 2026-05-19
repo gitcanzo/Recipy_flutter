@@ -434,4 +434,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get noFavouritesYetSub =>
       'Tap the heart on any recipe to mark it as a favourite.';
+
+  @override
+  String get importSkippedOne => '1 recipe skipped (duplicate name).';
+
+  @override
+  String importSkippedMany(int count) {
+    return '$count recipes skipped (duplicate names).';
+  }
+
+  @override
+  String get importAllDuplicates =>
+      'Nothing imported — all recipes already exist.';
 }

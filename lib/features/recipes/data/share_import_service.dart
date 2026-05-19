@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:archive/archive_io.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,37 +15,36 @@ final shareImportServiceProvider =
 
 /// Handles exporting recipes to `.recipy` files and importing them back.
 ///
-/// Export has two modes per operation:
-/// - **Save to device** — writes the file to the user-visible Downloads folder
-///   (Android) or shows a native save dialog (Windows/macOS/Linux).
-/// - **Share** — writes a temp file and opens the system share sheet.
+/// The `.recipy` format is a ZIP archive containing:
+///   - `recipes.json`  — the recipe collection (same JSON shape as before)
+///   - `images/<filename>` — one entry per referenced image
 ///
-/// Import reads any `.recipy` (or legacy `.json`) file the user picks.
+/// Legacy plain-JSON `.recipy` files are still accepted on import.
+///
+/// Export has two modes per operation:
+/// - **Save to device** — writes the file to Downloads (Android) or a save
+///   dialog (desktop).
+/// - **Share** — writes a temp file and opens the system share sheet.
 class ShareImportService {
   // ---------------------------------------------------------------------------
   // Export — single recipe — save to device
   // ---------------------------------------------------------------------------
 
-  /// Saves [recipe] as `<title>.recipy` to a user-visible location.
-  ///
-  /// Returns the saved path, or null if the user cancelled the save dialog.
   Future<String?> saveRecipeToDevice(Recipe recipe) async {
-    final json = jsonEncode(recipe.toJson());
+    final bytes = await _buildZip([recipe]);
     final filename = '${_safeFilename(recipe.title)}.recipy';
-    return _saveToDevice(filename: filename, content: json);
+    return _saveBytesToDevice(filename: filename, bytes: bytes);
   }
 
   // ---------------------------------------------------------------------------
   // Export — single recipe — share sheet
   // ---------------------------------------------------------------------------
 
-  /// Serialises [recipe] to a temp `.recipy` file and opens the system share
-  /// sheet so the user can send it via email, Bluetooth, etc.
   Future<void> shareRecipe(Recipe recipe, {required String shareText}) async {
-    final json = jsonEncode(recipe.toJson());
-    final file = await _writeTempFile(
+    final bytes = await _buildZip([recipe]);
+    final file = await _writeTempBytes(
       filename: '${_safeFilename(recipe.title)}.recipy',
-      content: json,
+      bytes: bytes,
     );
     await Share.shareXFiles(
       [XFile(file.path, mimeType: 'application/x-recipy')],
@@ -57,37 +57,25 @@ class ShareImportService {
   // Export — full collection — save to device
   // ---------------------------------------------------------------------------
 
-  /// Saves all [recipes] as `recipy_collection.recipy` to a user-visible
-  /// location.  Returns the saved path, or null if cancelled.
   Future<String?> saveCollectionToDevice(List<Recipe> recipes) async {
-    final payload = {
-      'version': 1,
-      'recipes': recipes.map((r) => r.toJson()).toList(),
-    };
-    final json = const JsonEncoder.withIndent('  ').convert(payload);
-    return _saveToDevice(
-        filename: 'recipy_collection.recipy', content: json);
+    final bytes = await _buildZip(recipes);
+    return _saveBytesToDevice(
+        filename: 'recipy_collection.recipy', bytes: bytes);
   }
 
   // ---------------------------------------------------------------------------
   // Export — full collection — share sheet
   // ---------------------------------------------------------------------------
 
-  /// Serialises [recipes] to a temp `.recipy` file and opens the system share
-  /// sheet.
   Future<void> shareCollection(
     List<Recipe> recipes, {
     required String subject,
     required String shareText,
   }) async {
-    final payload = {
-      'version': 1,
-      'recipes': recipes.map((r) => r.toJson()).toList(),
-    };
-    final json = const JsonEncoder.withIndent('  ').convert(payload);
-    final file = await _writeTempFile(
+    final bytes = await _buildZip(recipes);
+    final file = await _writeTempBytes(
       filename: 'recipy_collection.recipy',
-      content: json,
+      bytes: bytes,
     );
     await Share.shareXFiles(
       [XFile(file.path, mimeType: 'application/x-recipy')],
@@ -100,16 +88,9 @@ class ShareImportService {
   // Import — file picker
   // ---------------------------------------------------------------------------
 
-  /// Opens the system file picker filtered to `.recipy` and `.json` files,
-  /// reads the selected file, and returns the parsed list of [Recipe] objects.
-  ///
-  /// Returns an empty list if the user cancels or the file is unreadable.
-  /// Throws a [FormatException] with a sentinel message when the content is
-  /// structurally valid JSON but not recognisable as recipe data.
   Future<List<Recipe>> pickAndImport() async {
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['recipy', 'json'],
+      type: FileType.any,
       allowMultiple: false,
     );
 
@@ -118,72 +99,133 @@ class ShareImportService {
     final path = result.files.single.path;
     if (path == null) return [];
 
-    final content = await File(path).readAsString();
-    return _parseImportContent(content);
+    final bytes = await File(path).readAsBytes();
+    return _parseBytes(bytes);
   }
 
-  /// Parses a raw JSON string from a `.recipy` or `.json` import file.
+  /// Parses raw bytes from a `.recipy` file (ZIP or legacy plain JSON).
   ///
-  /// Called both from [pickAndImport] and from the intent-handler in main.dart
-  /// when the app is opened by tapping a `.recipy` file attachment.
-  List<Recipe> parseContent(String content) => _parseImportContent(content);
+  /// Called from [pickAndImport] and from the intent-handler in main.dart
+  /// when the app is opened by tapping a `.recipy` attachment.
+  Future<List<Recipe>> parseBytesFromFile(Uint8List bytes) =>
+      _parseBytes(bytes);
+
+  /// Parses a plain-JSON string (legacy format, no images).
+  ///
+  /// Kept for callers that already have a decoded string.
+  List<Recipe> parseContent(String content) => _parseJsonString(content);
 
   // ---------------------------------------------------------------------------
-  // Private helpers
+  // ZIP builder
   // ---------------------------------------------------------------------------
 
-  /// Saves [content] to [filename].
-  ///
-  /// On Android writes to the public Downloads directory so the file is visible
-  /// in the Files app without any storage permission on API 29+.
-  /// On desktop (Windows/macOS/Linux) shows a native save-file dialog.
-  /// Returns the saved path, or null if the user cancelled (desktop only).
-  Future<String?> _saveToDevice({
-    required String filename,
-    required String content,
-  }) async {
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      // On Android, getExternalStorageDirectory points to the app-scoped
-      // external storage.  For a user-visible Downloads folder we construct
-      // the standard path directly — no permission needed on API 29+.
-      final dir = Directory('/storage/emulated/0/Download');
-      if (!dir.existsSync()) {
-        // Fallback to app documents if the standard path is unavailable.
-        final appDir = await getApplicationDocumentsDirectory();
-        final file = File(p.join(appDir.path, filename));
-        await file.writeAsString(content, flush: true);
-        return file.path;
+  /// Builds a ZIP archive containing `recipes.json` and all referenced images.
+  Future<Uint8List> _buildZip(List<Recipe> recipes) async {
+    final archive = Archive();
+
+    // Collect image files, deduplicated by absolute path.
+    final imageFiles = <String, String>{}; // absPath -> archive entry name
+    for (final recipe in recipes) {
+      if (recipe.imagePath.isNotEmpty) {
+        final file = File(recipe.imagePath);
+        if (file.existsSync() && !imageFiles.containsKey(recipe.imagePath)) {
+          final name = p.basename(recipe.imagePath);
+          imageFiles[recipe.imagePath] = 'images/$name';
+        }
       }
-      final file = File(p.join(dir.path, filename));
-      await file.writeAsString(content, flush: true);
-      return file.path;
     }
 
-    // Desktop: show a native save dialog via file_picker.
-    final savePath = await FilePicker.platform.saveFile(
-      dialogTitle: 'Save recipe',
-      fileName: filename,
-      type: FileType.custom,
-      allowedExtensions: ['recipy'],
-    );
-    if (savePath == null) return null;
-    final file = File(savePath);
-    await file.writeAsString(content, flush: true);
-    return savePath;
+    // Build JSON payload: imagePath replaced by just the filename.
+    final jsonList = recipes.map((r) {
+      final map = r.toJson();
+      if (r.imagePath.isNotEmpty && imageFiles.containsKey(r.imagePath)) {
+        map['imageFile'] = p.basename(r.imagePath);
+      }
+      return map;
+    }).toList();
+
+    final payload = {
+      'version': 2,
+      'recipes': jsonList,
+    };
+    final jsonBytes =
+        utf8.encode(const JsonEncoder.withIndent('  ').convert(payload));
+    archive.addFile(ArchiveFile('recipes.json', jsonBytes.length, jsonBytes));
+
+    // Add image files.
+    for (final entry in imageFiles.entries) {
+      final bytes = await File(entry.key).readAsBytes();
+      archive.addFile(ArchiveFile(entry.value, bytes.length, bytes));
+    }
+
+    return Uint8List.fromList(ZipEncoder().encode(archive));
   }
 
-  /// Writes [content] to a file named [filename] in the system temp directory.
-  Future<File> _writeTempFile({
-    required String filename,
-    required String content,
-  }) async {
-    final dir = await getTemporaryDirectory();
-    final file = File(p.join(dir.path, filename));
-    await file.writeAsString(content, flush: true);
-    return file;
+  // ---------------------------------------------------------------------------
+  // ZIP / JSON parser
+  // ---------------------------------------------------------------------------
+
+  Future<List<Recipe>> _parseBytes(Uint8List bytes) async {
+    // Detect ZIP by magic bytes: PK\x03\x04
+    if (bytes.length >= 4 &&
+        bytes[0] == 0x50 &&
+        bytes[1] == 0x4B &&
+        bytes[2] == 0x03 &&
+        bytes[3] == 0x04) {
+      return _parseZip(bytes);
+    }
+    // Fall back to plain JSON.
+    return _parseJsonString(utf8.decode(bytes));
   }
 
-  List<Recipe> _parseImportContent(String content) {
+  Future<List<Recipe>> _parseZip(Uint8List bytes) async {
+    final archive = ZipDecoder().decodeBytes(bytes);
+
+    // Extract images first so paths are available when building recipes.
+    final dir = await getApplicationDocumentsDirectory();
+    final imagesDir = Directory(p.join(dir.path, 'recipe_images'));
+    if (!imagesDir.existsSync()) imagesDir.createSync(recursive: true);
+
+    // Map archive entry name → local absolute path.
+    final extractedImages = <String, String>{};
+    for (final file in archive) {
+      if (file.isFile && file.name.startsWith('images/')) {
+        final filename = p.basename(file.name);
+        // Avoid collisions with existing files by prepending a timestamp.
+        final ts = DateTime.now().millisecondsSinceEpoch;
+        final localName = '${ts}_$filename';
+        final dest = File(p.join(imagesDir.path, localName));
+        await dest.writeAsBytes(file.content);
+        extractedImages[filename] = dest.path;
+      }
+    }
+
+    // Parse recipes.json.
+    final jsonEntry = archive.findFile('recipes.json');
+    if (jsonEntry == null) throw const FormatException('json_not_recipe_data');
+    final jsonString = utf8.decode(jsonEntry.content);
+    final recipes = _parseJsonString(jsonString);
+
+    // Re-attach image paths using the imageFile key stored in toJson.
+    final dynamic decoded = jsonDecode(jsonString);
+    final List<dynamic> rawList = decoded is Map && decoded.containsKey('recipes')
+        ? decoded['recipes'] as List<dynamic>
+        : decoded is List
+            ? decoded
+            : [];
+
+    return List.generate(recipes.length, (i) {
+      final imageFile = i < rawList.length
+          ? (rawList[i] as Map<String, dynamic>)['imageFile'] as String?
+          : null;
+      if (imageFile != null && extractedImages.containsKey(imageFile)) {
+        return recipes[i].copyWith(imagePath: extractedImages[imageFile]);
+      }
+      return recipes[i];
+    });
+  }
+
+  List<Recipe> _parseJsonString(String content) {
     final dynamic decoded = jsonDecode(content);
 
     if (decoded is Map<String, dynamic>) {
@@ -208,6 +250,44 @@ class ShareImportService {
     }
 
     throw const FormatException('json_unrecognised_format');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  Future<String?> _saveBytesToDevice({
+    required String filename,
+    required Uint8List bytes,
+  }) async {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final dir = Directory('/storage/emulated/0/Download');
+      final base = dir.existsSync() ? dir : await getApplicationDocumentsDirectory();
+      final file = File(p.join(base.path, filename));
+      await file.writeAsBytes(bytes, flush: true);
+      return file.path;
+    }
+
+    // Desktop: show a native save dialog.
+    final savePath = await FilePicker.platform.saveFile(
+      dialogTitle: 'Save recipe',
+      fileName: filename,
+      type: FileType.custom,
+      allowedExtensions: ['recipy'],
+    );
+    if (savePath == null) return null;
+    await File(savePath).writeAsBytes(bytes, flush: true);
+    return savePath;
+  }
+
+  Future<File> _writeTempBytes({
+    required String filename,
+    required Uint8List bytes,
+  }) async {
+    final dir = await getTemporaryDirectory();
+    final file = File(p.join(dir.path, filename));
+    await file.writeAsBytes(bytes, flush: true);
+    return file;
   }
 
   String _safeFilename(String title) {

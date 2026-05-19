@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import '../../../../shared/utils/image_utils.dart';
 import '../../data/recipe_repository.dart';
 import '../../domain/ingredient_group.dart';
 import '../../domain/recipe.dart';
@@ -347,13 +348,9 @@ class _RecipeEditScreenState extends ConsumerState<RecipeEditScreen> {
     final dir = await getApplicationDocumentsDirectory();
     final imagesDir = Directory(p.join(dir.path, 'recipe_images'));
     if (!imagesDir.existsSync()) imagesDir.createSync(recursive: true);
-    final ext = p.extension(_pickedImage!.path).isNotEmpty
-        ? p.extension(_pickedImage!.path)
-        : '.jpg';
-    final filename = '${DateTime.now().millisecondsSinceEpoch}$ext';
-    final dest = File(p.join(imagesDir.path, filename));
-    await _pickedImage!.copy(dest.path);
-    return dest.path;
+    final destPath = p.join(imagesDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+    final compressed = await compressImage(_pickedImage!, destPath);
+    return compressed.path;
   }
 
   // ---------------------------------------------------------------------------

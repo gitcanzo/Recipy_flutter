@@ -62,10 +62,10 @@ class _RecipyAppState extends ConsumerState<RecipyApp> {
         debugPrint('[Recipy] file exists: ${file.existsSync()} at $filePath');
         if (!file.existsSync()) continue;
 
-        final content = await file.readAsString();
-        debugPrint('[Recipy] content length: ${content.length}');
+        final bytes = await file.readAsBytes();
+        debugPrint('[Recipy] content length: ${bytes.length}');
         final service = ref.read(shareImportServiceProvider);
-        final parsed = service.parseContent(content);
+        final parsed = await service.parseBytesFromFile(bytes);
         debugPrint('[Recipy] parsed ${parsed.length} recipe(s)');
         allRecipes.addAll(parsed);
       } catch (e) {
