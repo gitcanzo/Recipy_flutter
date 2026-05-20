@@ -6,18 +6,35 @@ class AppDelegate: FlutterAppDelegate {
   // Channel name must match the one registered in macos_file_handler.dart.
   private let channelName = "com.gcanz.recipy/file_open"
 
-  // Set once the Flutter engine is ready in applicationDidFinishLaunching.
+  // Set once the Flutter engine is ready.
   private var methodChannel: FlutterMethodChannel?
 
-  // Paths collected before the Flutter engine is ready (cold launch via
-  // Finder double-click). Delivered once the channel is up.
+  // Paths queued before the Flutter engine is ready (cold launch).
   private var pendingFilePaths: [String] = []
 
+  // applicationWillFinishLaunching fires before the Apple Event system
+  // delivers any queued file-open events. Registering our handler here
+  // ensures we intercept kAEOpenDocuments before AppKit tries to call
+  // applicationDidFinishLaunching with a file path baked in (which was
+  // causing "unrecognized selector" crashes in our override).
+  override func applicationWillFinishLaunching(_ notification: Notification) {
+    super.applicationWillFinishLaunching(notification)
+
+    NSAppleEventManager.shared().setEventHandler(
+      self,
+      andSelector: #selector(handleOpenDocuments(_:replyEvent:)),
+      forEventClass: AEEventClass(kCoreEventClass),
+      andEventID: AEEventID(kAEOpenDocuments)
+    )
+  }
+
+  // applicationDidFinishLaunching: let the superclass run first so the
+  // Flutter engine and MainFlutterWindow are fully initialised, then
+  // attach the MethodChannel and flush any pending file paths.
   override func applicationDidFinishLaunching(_ notification: Notification) {
-    // super must run first — it creates MainFlutterWindow and starts the engine.
     super.applicationDidFinishLaunching(notification)
 
-    // Wire up the MethodChannel now that the engine messenger exists.
+    // Attach the channel to the engine's binary messenger.
     if let flutterVC = mainFlutterWindow?.contentViewController as? FlutterViewController {
       methodChannel = FlutterMethodChannel(
         name: channelName,
@@ -25,19 +42,8 @@ class AppDelegate: FlutterAppDelegate {
       )
     }
 
-    // Register for the kAEOpenDocuments Apple Event directly.
-    // macOS sends this event when the user double-clicks a registered file type.
-    // The NSApplication delegate methods (openFile/openFiles) are not reliably
-    // called for cold launches — the Apple Event is the authoritative source.
-    NSAppleEventManager.shared().setEventHandler(
-      self,
-      andSelector: #selector(handleOpenDocumentsEvent(_:replyEvent:)),
-      forEventClass: AEEventClass(kCoreEventClass),
-      andEventID: AEEventID(kAEOpenDocuments)
-    )
-
     // Deliver any paths that arrived before the engine was ready.
-    // Async so the Flutter widget tree has one run-loop cycle to settle first.
+    // Async so the Flutter widget tree has one run-loop cycle to settle.
     let pending = pendingFilePaths
     pendingFilePaths = []
     if !pending.isEmpty {
@@ -49,41 +55,36 @@ class AppDelegate: FlutterAppDelegate {
     }
   }
 
-  // Handles the kAEOpenDocuments Apple Event sent by macOS when the user
-  // double-clicks a .recipy file in Finder or drops it onto the Dock icon.
-  // This is the most reliable cross-version mechanism; the NSApplicationDelegate
-  // openFile/openFiles methods are not consistently called on cold launches.
-  @objc func handleOpenDocumentsEvent(_ event: NSAppleEventDescriptor, replyEvent: NSAppleEventDescriptor) {
-    // The direct object of the event is a list of file aliases.
+  // Handles the kAEOpenDocuments Apple Event — the authoritative mechanism
+  // macOS uses when the user double-clicks a .recipy file in Finder or
+  // drops it onto the Dock icon.
+  @objc func handleOpenDocuments(_ event: NSAppleEventDescriptor, replyEvent: NSAppleEventDescriptor) {
     guard let fileList = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject)) else { return }
 
-    // Iterate over all items in the list (usually just one for Recipy).
+    // fileList is usually a single item but we iterate defensively.
     let count = fileList.numberOfItems
     for i in 1...max(1, count) {
       guard let fileDesc = fileList.atIndex(i),
             let fileURL = fileDesc.fileURLValue else { continue }
       let path = fileURL.path
-      NSLog("[Recipy] handleOpenDocumentsEvent: \(path)")
+      NSLog("[Recipy] handleOpenDocuments: \(path)")
       deliverFilePath(path)
     }
   }
 
-  // Routes a file path to Dart via the MethodChannel if the engine is ready,
-  // or queues it in pendingFilePaths for delivery after launch completes.
+  // Sends the file path to Dart via MethodChannel, or queues it if the
+  // engine is not ready yet (cold launch before applicationDidFinishLaunching).
   private func deliverFilePath(_ path: String) {
     if let channel = methodChannel {
-      // Engine is ready — deliver immediately on the main thread.
       DispatchQueue.main.async {
         channel.invokeMethod("openFile", arguments: path)
       }
     } else {
-      // Cold launch: engine not ready yet. Park the path; it will be
-      // sent in applicationDidFinishLaunching once the channel exists.
       pendingFilePaths.append(path)
     }
   }
 
-  // Quit when the last window closes — standard for single-window document apps.
+  // Quit when the last window closes — standard for single-window apps.
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     return true
   }
