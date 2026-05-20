@@ -2,7 +2,7 @@ name: recipy
 description: "A personal recipe manager with local storage and sharing."
 publish_to: 'none'
 
-version: 0.2.2+4
+version: 0.2.3+5
 
 environment:
   sdk: ^3.11.5
