@@ -18,6 +18,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
   // applicationWillFinishLaunching fires before the Apple Event system
   // delivers any queued file-open events, so we register our handler here.
   func applicationWillFinishLaunching(_ notification: Notification) {
+    NSLog("[Recipy] applicationWillFinishLaunching — registering Apple Event handler")
     NSAppleEventManager.shared().setEventHandler(
       self,
       andSelector: #selector(handleOpenDocuments(_:replyEvent:)),
@@ -27,13 +28,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
+    NSLog("[Recipy] applicationDidFinishLaunching — mainFlutterWindow: \(String(describing: mainFlutterWindow))")
     // Attach the MethodChannel to the Flutter engine's binary messenger.
     // MainFlutterWindow is set up by the nib before this method is called.
     if let flutterVC = mainFlutterWindow?.contentViewController as? FlutterViewController {
+      NSLog("[Recipy] applicationDidFinishLaunching — channel created")
       methodChannel = FlutterMethodChannel(
         name: channelName,
         binaryMessenger: flutterVC.engine.binaryMessenger
       )
+    } else {
+      NSLog("[Recipy] applicationDidFinishLaunching — WARNING: could not create channel, flutterVC is nil")
     }
 
     // Deliver any file paths that arrived before the engine was ready.
