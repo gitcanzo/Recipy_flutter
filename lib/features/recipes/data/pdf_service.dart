@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
@@ -6,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../domain/ingredient_group.dart';
 import '../domain/recipe.dart';
 
@@ -72,34 +74,64 @@ class PdfService {
   // Public entry points
   // ---------------------------------------------------------------------------
 
-  /// Opens the system print / preview dialog pre-loaded with a PDF for
-  /// [recipe].
+  /// Returns true on desktop platforms where [Printing.layoutPdf] is
+  /// unsupported or undesirable — we open the PDF in the system viewer instead.
+  bool get _useSystemViewer =>
+      defaultTargetPlatform == TargetPlatform.macOS ||
+      defaultTargetPlatform == TargetPlatform.windows ||
+      defaultTargetPlatform == TargetPlatform.linux;
+
+  /// Generates a PDF for [recipe] and opens it.
   ///
-  /// The dialog lets the user print, save as PDF, or share the file depending
-  /// on the platform.
+  /// On mobile/web, uses [Printing.layoutPdf] to show the native print dialog.
+  /// On desktop (macOS, Windows, Linux), saves to a temp file and opens it in
+  /// the default PDF viewer (e.g. Preview on macOS, Adobe/Edge on Windows).
   Future<void> previewRecipe(Recipe recipe, {required PdfLabels labels}) async {
-    await Printing.layoutPdf(
-      name: _safeFilename(recipe.title),
-      onLayout: (format) async {
-        final doc = await _buildRecipeDoc(recipe, format, labels);
-        return doc.save();
-      },
-    );
+    if (_useSystemViewer) {
+      final doc = await _buildRecipeDoc(recipe, PdfPageFormat.a4, labels);
+      await _openInSystemViewer(doc, _safeFilename(recipe.title));
+    } else {
+      await Printing.layoutPdf(
+        name: _safeFilename(recipe.title),
+        onLayout: (format) async {
+          final doc = await _buildRecipeDoc(recipe, format, labels);
+          return doc.save();
+        },
+      );
+    }
   }
 
-  /// Opens the system print / preview dialog pre-loaded with a recipe book
-  /// PDF containing all [recipes], sorted in the order they are provided.
+  /// Generates a recipe book PDF for all [recipes] and opens it.
   ///
   /// The book includes a cover page, a table of contents, and one page (or
-  /// more for long recipes) per recipe.
+  /// more for long recipes) per recipe.  Desktop platforms open in the system
+  /// PDF viewer; mobile shows the native print dialog.
   Future<void> previewBook(List<Recipe> recipes, {required PdfLabels labels}) async {
-    await Printing.layoutPdf(
-      name: 'Recipy_Book',
-      onLayout: (format) async {
-        final doc = await _buildBookDoc(recipes, format, labels);
-        return doc.save();
-      },
-    );
+    if (_useSystemViewer) {
+      final doc = await _buildBookDoc(recipes, PdfPageFormat.a4, labels);
+      await _openInSystemViewer(doc, 'Recipy_Book');
+    } else {
+      await Printing.layoutPdf(
+        name: 'Recipy_Book',
+        onLayout: (format) async {
+          final doc = await _buildBookDoc(recipes, format, labels);
+          return doc.save();
+        },
+      );
+    }
+  }
+
+  /// Saves [doc] to a temp file and opens it in the default system PDF viewer.
+  Future<void> _openInSystemViewer(pw.Document doc, String name) async {
+    final dir = await getTemporaryDirectory();
+    final file = File(p.join(dir.path, '$name.pdf'));
+    await file.writeAsBytes(await doc.save());
+    final uri = Uri.file(file.path);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      throw Exception('Could not open PDF: ${file.path}');
+    }
   }
 
   // ---------------------------------------------------------------------------

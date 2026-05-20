@@ -139,6 +139,11 @@ class _RecipeEditScreenState extends ConsumerState<RecipeEditScreen> {
   /// directory (from a previous save).
   String _existingImagePath = '';
 
+  // Fields preserved from the original recipe that are not editable in the UI.
+  bool _isFavourite = false;
+  String _sourceUrl = '';
+  DateTime? _originalCreatedAt;
+
   /// True while the save operation is in progress (disables the save button).
   bool _isSaving = false;
 
@@ -239,6 +244,11 @@ class _RecipeEditScreenState extends ConsumerState<RecipeEditScreen> {
 
     // Carry over any image that was downloaded during import.
     _existingImagePath = recipe.imagePath;
+    // sourceUrl is preserved so the link remains visible after the user saves.
+    // isFavourite is intentionally NOT carried over — an imported recipe should
+    // never start as a favourite; that is a personal preference of the importer.
+    _sourceUrl = recipe.sourceUrl;
+    _originalCreatedAt = recipe.createdAt;
   }
 
   /// Fetches the existing recipe from SQLite and pre-fills all form fields.
@@ -283,6 +293,9 @@ class _RecipeEditScreenState extends ConsumerState<RecipeEditScreen> {
         _stepFocusNodes = steps.map((_) => FocusNode()).toList();
 
         _existingImagePath = recipe.imagePath;
+        _isFavourite = recipe.isFavourite;
+        _sourceUrl = recipe.sourceUrl;
+        _originalCreatedAt = recipe.createdAt;
         _attachDirtyListeners(entries: _groupEntries, steps: _stepControllers);
         // Reset dirty flag — loading existing data is not a user change.
         _isDirty = false;
@@ -425,9 +438,13 @@ class _RecipeEditScreenState extends ConsumerState<RecipeEditScreen> {
         servings: int.tryParse(_servingsController.text) ?? 0,
         tags: tags,
         imagePath: imagePath,
-        sourceUrl: '',
+        // Preserve fields that are not editable in the form.
+        // For new recipes these default to false / '' / now.
+        sourceUrl: _sourceUrl,
+        isFavourite: _isFavourite,
         notes: _notesController.text.trim(),
-        createdAt: now,
+        // Preserve the original creation timestamp on edits; use now for new.
+        createdAt: _originalCreatedAt ?? now,
         updatedAt: now,
       );
 
