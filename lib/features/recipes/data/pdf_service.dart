@@ -123,7 +123,12 @@ class PdfService {
 
   /// Saves [doc] to a temp file and opens it in the default system PDF viewer.
   Future<void> _openInSystemViewer(pw.Document doc, String name) async {
-    final dir = await getTemporaryDirectory();
+    // getTemporaryDirectory() may return a path that doesn't exist yet inside
+    // the macOS sandbox — use getApplicationSupportDirectory() which is always
+    // created for us, then create a 'pdfs' subfolder to keep things tidy.
+    final base = await getApplicationSupportDirectory();
+    final dir = Directory(p.join(base.path, 'pdfs'));
+    if (!dir.existsSync()) dir.createSync(recursive: true);
     final file = File(p.join(dir.path, '$name.pdf'));
     await file.writeAsBytes(await doc.save());
     final uri = Uri.file(file.path);

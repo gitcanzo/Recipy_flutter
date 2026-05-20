@@ -6,6 +6,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'l10n/app_localizations.dart';
+import 'macos_file_handler.dart';
 
 // Conditional import: Android gets the real sharing handler; all other
 // platforms get a no-op stub so receive_sharing_intent is never compiled in.
@@ -37,8 +38,13 @@ class _RecipyAppState extends ConsumerState<RecipyApp> {
   @override
   void initState() {
     super.initState();
+    // Wire up Android file-intent handler (receive_sharing_intent).
     if (defaultTargetPlatform == TargetPlatform.android) {
       initSharingHandler(ref);
+    }
+    // Wire up macOS file-open handler (MethodChannel from AppDelegate.swift).
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      initMacOSFileHandler(ref);
     }
   }
 
