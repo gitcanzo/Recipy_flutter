@@ -17,8 +17,12 @@ class AppDelegate: FlutterAppDelegate {
   private var pendingFilePath: String?
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
-    // Retrieve the FlutterViewController from the main window so we can attach
-    // the MethodChannel to its engine's binary messenger.
+    // Let the superclass run first — this initialises the Flutter engine,
+    // creates MainFlutterWindow, and sets contentViewController. Without
+    // this order, mainFlutterWindow is nil and the engine is not ready.
+    super.applicationDidFinishLaunching(notification)
+
+    // Now that the engine is up, attach the MethodChannel to its messenger.
     if let flutterVC = mainFlutterWindow?.contentViewController as? FlutterViewController {
       methodChannel = FlutterMethodChannel(
         name: channelName,
@@ -26,14 +30,14 @@ class AppDelegate: FlutterAppDelegate {
       )
     }
 
-    // Let the superclass finish its own setup (registers plugins, etc.).
-    super.applicationDidFinishLaunching(notification)
-
-    // Now that the channel is registered, deliver any file that arrived
-    // during the cold-start window before the engine was ready.
+    // Deliver any file that arrived during cold launch (before the engine
+    // was ready). We dispatch async so the Flutter framework has one run-loop
+    // cycle to finish widget tree initialisation before we invoke the channel.
     if let path = pendingFilePath {
-      methodChannel?.invokeMethod("openFile", arguments: path)
       pendingFilePath = nil
+      DispatchQueue.main.async {
+        self.methodChannel?.invokeMethod("openFile", arguments: path)
+      }
     }
   }
 
@@ -42,6 +46,7 @@ class AppDelegate: FlutterAppDelegate {
   // This is the legacy single-file variant — still called on older macOS.
   // Returning true tells macOS we accepted responsibility for the file.
   override func application(_ sender: NSApplication, openFile filename: String) -> Bool {
+    NSLog("[Recipy] application(_:openFile:) called with: \(filename)")
     deliverFilePath(filename)
     return true
   }
@@ -50,6 +55,7 @@ class AppDelegate: FlutterAppDelegate {
   // when the app is registered as a document handler via CFBundleDocumentTypes.
   // We handle all URLs in the array, but in practice Recipy only opens one at a time.
   override func application(_ sender: NSApplication, openFiles filenames: [String]) {
+    NSLog("[Recipy] application(_:openFiles:) called with: \(filenames)")
     for filename in filenames {
       deliverFilePath(filename)
     }
@@ -60,9 +66,11 @@ class AppDelegate: FlutterAppDelegate {
   // or parks it in pendingFilePath for delivery once the engine finishes launching.
   private func deliverFilePath(_ path: String) {
     if let channel = methodChannel {
+      NSLog("[Recipy] deliverFilePath: channel ready, invoking openFile with: \(path)")
       // Engine is ready — deliver the path to Dart immediately.
       channel.invokeMethod("openFile", arguments: path)
     } else {
+      NSLog("[Recipy] deliverFilePath: channel not ready, parking path: \(path)")
       // Engine not ready yet (cold launch). Store the path; it will be
       // delivered in applicationDidFinishLaunching once the channel exists.
       // Only the most recent path is kept — Recipy is single-window.
