@@ -5,6 +5,8 @@ class MainFlutterWindow: NSWindow {
   private let channelName = "com.gcanz.recipy/file_open"
   private var methodChannel: FlutterMethodChannel?
   private var pendingFilePaths: [String] = []
+  // Set to true once windowDidBecomeKey fires and Dart's handler is ready.
+  private var dartIsReady = false
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -51,30 +53,35 @@ class MainFlutterWindow: NSWindow {
     for i in 1...max(1, count) {
       guard let fileDesc = fileList.atIndex(i),
             let fileURL = fileDesc.fileURLValue else { continue }
-      // Queue the path — deliver once the Flutter widget tree is ready.
-      pendingFilePaths.append(fileURL.path)
+      let path = fileURL.path
+      if dartIsReady {
+        // App already running — deliver immediately on the next run loop tick.
+        DispatchQueue.main.async {
+          self.methodChannel?.invokeMethod("openFile", arguments: path)
+        }
+      } else {
+        // Cold launch — queue until Dart registers its handler.
+        pendingFilePaths.append(path)
+      }
     }
-    // Attempt delivery immediately in case the engine is already running
-    // (e.g. the file was opened while the app was already open).
-    deliverPendingPaths()
   }
 
-  // Called when the window becomes key — Flutter's Dart isolate is now
-  // running and the method call handler is registered on the Dart side.
+  // Called once when the window first becomes key — signals that Dart's
+  // initState has run and the method call handler is registered.
   @objc func windowDidBecomeKey(_ notification: Notification) {
-    // Unregister so we only do the initial delivery once.
     NotificationCenter.default.removeObserver(
       self,
       name: NSWindow.didBecomeKeyNotification,
       object: self
     )
-    // Small delay to ensure Dart's channel.setMethodCallHandler has run.
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+    // Wait for Dart's channel.setMethodCallHandler to complete.
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+      self.dartIsReady = true
       self.deliverPendingPaths()
     }
   }
 
-  // Delivers all queued file paths to Dart via the MethodChannel.
+  // Delivers all queued cold-launch paths once Dart is ready.
   private func deliverPendingPaths() {
     guard !pendingFilePaths.isEmpty, let channel = methodChannel else { return }
     let paths = pendingFilePaths
