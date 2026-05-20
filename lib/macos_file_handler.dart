@@ -48,10 +48,9 @@ void initMacOSFileHandler(WidgetRef ref) {
       // confirmation dialog on the next frame, exactly as it does for
       // Android intent-based imports.
       ref.read(pendingImportProvider.notifier).state = parsed;
-    } catch (e) {
-      // Log the error so we can diagnose issues during development.
-      // ignore: avoid_print
-      print('[Recipy] macos_file_handler error: $e');
+    } catch (_) {
+      // Silently ignore unreadable or malformed files — the user will simply
+      // see nothing happen, which is better than an unhandled crash.
     }
   });
 }
