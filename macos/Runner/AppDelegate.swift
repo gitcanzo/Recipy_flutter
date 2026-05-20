@@ -6,6 +6,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
   // Channel name must match the one registered in macos_file_handler.dart.
   private let channelName = "com.gcanz.recipy/file_open"
 
+  // Connected by the MainMenu nib — gives us access to the Flutter engine.
+  @IBOutlet var mainFlutterWindow: MainFlutterWindow?
+
   // Set once the Flutter engine is ready.
   private var methodChannel: FlutterMethodChannel?
 
@@ -26,7 +29,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
     // Attach the MethodChannel to the Flutter engine's binary messenger.
     // MainFlutterWindow is set up by the nib before this method is called.
-    if let flutterVC = NSApp.mainWindow?.contentViewController as? FlutterViewController {
+    if let flutterVC = mainFlutterWindow?.contentViewController as? FlutterViewController {
       methodChannel = FlutterMethodChannel(
         name: channelName,
         binaryMessenger: flutterVC.engine.binaryMessenger
