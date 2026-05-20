@@ -29,8 +29,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSLog("[Recipy] applicationDidFinishLaunching — mainFlutterWindow: \(String(describing: mainFlutterWindow))")
+
     // Attach the MethodChannel to the Flutter engine's binary messenger.
-    // MainFlutterWindow is set up by the nib before this method is called.
+    // mainFlutterWindow is wired by the nib and available here.
     if let flutterVC = mainFlutterWindow?.contentViewController as? FlutterViewController {
       NSLog("[Recipy] applicationDidFinishLaunching — channel created")
       methodChannel = FlutterMethodChannel(
@@ -41,16 +42,46 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       NSLog("[Recipy] applicationDidFinishLaunching — WARNING: could not create channel, flutterVC is nil")
     }
 
-    // Deliver any file paths that arrived before the engine was ready.
-    // Async so the Flutter widget tree has one run-loop cycle to settle.
-    let pending = pendingFilePaths
+    // On a cold launch triggered by a file open, the Flutter widget tree is
+    // not ready yet even though the channel exists. We wait for the window to
+    // become key (i.e. fully visible and interactive) before delivering pending
+    // paths — at that point Dart is guaranteed to be listening.
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(windowDidBecomeKey(_:)),
+      name: NSWindow.didBecomeKeyNotification,
+      object: mainFlutterWindow
+    )
+
+    // Also attempt delivery now for the case where the app was already running
+    // (warm launch) — the window is already key so the notification won't fire.
+    deliverPendingPaths()
+  }
+
+  // Called when the main window becomes key — at this point Flutter's widget
+  // tree is fully initialised and ready to receive method channel calls.
+  @objc func windowDidBecomeKey(_ notification: Notification) {
+    NSLog("[Recipy] windowDidBecomeKey — delivering pending paths")
+    // Unregister so we only deliver once per launch.
+    NotificationCenter.default.removeObserver(
+      self,
+      name: NSWindow.didBecomeKeyNotification,
+      object: mainFlutterWindow
+    )
+    // Small delay to let the Dart side register its method call handler.
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+      self.deliverPendingPaths()
+    }
+  }
+
+  // Delivers all queued file paths via the MethodChannel.
+  private func deliverPendingPaths() {
+    guard !pendingFilePaths.isEmpty, let channel = methodChannel else { return }
+    let paths = pendingFilePaths
     pendingFilePaths = []
-    if !pending.isEmpty {
-      DispatchQueue.main.async {
-        for path in pending {
-          self.methodChannel?.invokeMethod("openFile", arguments: path)
-        }
-      }
+    NSLog("[Recipy] deliverPendingPaths — delivering \(paths.count) path(s)")
+    for path in paths {
+      channel.invokeMethod("openFile", arguments: path)
     }
   }
 
@@ -68,16 +99,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
   }
 
-  // Sends the path to Dart via MethodChannel, or queues it if the engine
-  // is not ready yet (cold launch before applicationDidFinishLaunching).
+  // Queues the path and attempts immediate delivery if the channel exists.
+  // On cold launch the channel isn't ready yet — delivery happens later
+  // in windowDidBecomeKey once Flutter's widget tree is initialised.
   private func deliverFilePath(_ path: String) {
-    if let channel = methodChannel {
-      DispatchQueue.main.async {
-        channel.invokeMethod("openFile", arguments: path)
-      }
-    } else {
-      pendingFilePaths.append(path)
-    }
+    NSLog("[Recipy] deliverFilePath — queuing: \(path)")
+    pendingFilePaths.append(path)
+    deliverPendingPaths()
   }
 
   // Quit when the last window closes — standard for single-window apps.
