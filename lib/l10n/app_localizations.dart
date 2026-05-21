@@ -692,6 +692,12 @@ abstract class AppLocalizations {
   /// **'Save the .recipy file to your Downloads folder'**
   String get saveToDeviceSubtitle;
 
+  /// Subtitle for the open-in-viewer option in the PDF export bottom sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Open in the system PDF viewer'**
+  String get savePdfToDeviceSubtitle;
+
   /// Export bottom sheet option to open the system share sheet
   ///
   /// In en, this message translates to:

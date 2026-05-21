@@ -101,6 +101,7 @@
 
   "saveToDevice": "Salva sul dispositivo",
   "saveToDeviceSubtitle": "Salva il file .recipy nella cartella Download",
+  "savePdfToDeviceSubtitle": "Apri nel visualizzatore PDF di sistema",
   "shareViaApp": "Condividi con…",
   "shareViaAppSubtitle": "Invia tramite email, Bluetooth o un'altra app",
   "savedToDevice": "Salvato in {path}",

@@ -3,13 +3,15 @@ import 'package:go_router/go_router.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/recipy_colors.dart';
 
-/// A 2-second branded loading screen shown at app start.
+/// Branded loading screen shown at app start.
 ///
-/// The OS splash screen disappears quickly (and the logo is constrained to a
-/// small circle on Android 12+).  This screen fills that gap by showing the
-/// full splash logo at a comfortable size before handing off to the recipe
-/// list.  It does not perform any async work — the database warms up in the
-/// background while the logo is on screen.
+/// Timeline (total ~3 s):
+///   0 ms   — logo fades in over 600 ms
+///   2500 ms — logo fades out over 500 ms
+///   3000 ms — navigate to /recipes (GoRouter applies its own fade transition)
+///
+/// The database warms up in the background while the logo is on screen so
+/// the recipe list is ready the moment the transition completes.
 class LoadingScreen extends StatefulWidget {
   const LoadingScreen({super.key});
 
@@ -21,9 +23,17 @@ class _LoadingScreenState extends State<LoadingScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
-  /// Fade-in animation for the logo so the transition from the OS splash
-  /// feels smooth rather than abrupt.
-  late final Animation<double> _fadeIn;
+  /// Drives both the fade-in (0→1 over first 600 ms) and the fade-out
+  /// (1→0 over final 500 ms) using a single TweenSequence so the logo
+  /// breathes naturally rather than snapping.
+  late final Animation<double> _opacity;
+
+  // Total duration of the loading screen stay.
+  static const _totalDuration = Duration(milliseconds: 4100);
+  // How long the fade-in takes.
+  static const _fadeInMs = 600;
+  // How long the fade-out takes (must be < _totalDuration).
+  static const _fadeOutMs = 500;
 
   @override
   void initState() {
@@ -31,16 +41,33 @@ class _LoadingScreenState extends State<LoadingScreen>
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: _totalDuration,
     );
 
-    _fadeIn = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
+    // The logo is fully opaque between the end of fade-in and the start of
+    // fade-out.  Express each phase as a weight proportional to its duration.
+    final total = _totalDuration.inMilliseconds;
+    final holdMs = total - _fadeInMs - _fadeOutMs;
 
-    // Start the fade-in immediately.
-    _controller.forward();
+    _opacity = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: _fadeInMs.toDouble(),
+      ),
+      TweenSequenceItem(
+        tween: ConstantTween(1.0),
+        weight: holdMs.toDouble(),
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: _fadeOutMs.toDouble(),
+      ),
+    ]).animate(_controller);
 
-    // Navigate to the recipe list after 2 seconds.
-    Future.delayed(const Duration(seconds: 2), () {
+    // Run the whole sequence once, then navigate.
+    _controller.forward().whenComplete(() {
       if (mounted) context.go(AppRoutes.recipes);
     });
   }
@@ -57,7 +84,7 @@ class _LoadingScreenState extends State<LoadingScreen>
       backgroundColor: RecipyColors.paper,
       body: Center(
         child: FadeTransition(
-          opacity: _fadeIn,
+          opacity: _opacity,
           child: Image.asset(
             'assets/images/splash_logo.png',
             width: 330,

@@ -74,9 +74,9 @@ class PdfService {
   // Public entry points
   // ---------------------------------------------------------------------------
 
-  /// Returns true on desktop platforms where [Printing.layoutPdf] is
-  /// unsupported or undesirable — we open the PDF in the system viewer instead.
-  bool get _useSystemViewer =>
+  /// Returns true on desktop platforms where we open the PDF in the system
+  /// viewer instead of using [Printing.layoutPdf].
+  bool get isDesktop =>
       defaultTargetPlatform == TargetPlatform.macOS ||
       defaultTargetPlatform == TargetPlatform.windows ||
       defaultTargetPlatform == TargetPlatform.linux;
@@ -87,7 +87,7 @@ class PdfService {
   /// On desktop (macOS, Windows, Linux), saves to a temp file and opens it in
   /// the default PDF viewer (e.g. Preview on macOS, Adobe/Edge on Windows).
   Future<void> previewRecipe(Recipe recipe, {required PdfLabels labels}) async {
-    if (_useSystemViewer) {
+    if (isDesktop) {
       final doc = await _buildRecipeDoc(recipe, PdfPageFormat.a4, labels);
       await _openInSystemViewer(doc, _safeFilename(recipe.title));
     } else {
@@ -101,13 +101,22 @@ class PdfService {
     }
   }
 
+  /// Returns the raw PDF bytes for [recipe] without opening any viewer.
+  Future<Uint8List> buildRecipePdfBytes(Recipe recipe, {required PdfLabels labels}) async {
+    final doc = await _buildRecipeDoc(recipe, PdfPageFormat.a4, labels);
+    return doc.save();
+  }
+
+  /// Returns the safe filename (no extension) for [recipe].
+  String safeFilename(String title) => _safeFilename(title);
+
   /// Generates a recipe book PDF for all [recipes] and opens it.
   ///
   /// The book includes a cover page, a table of contents, and one page (or
   /// more for long recipes) per recipe.  Desktop platforms open in the system
   /// PDF viewer; mobile shows the native print dialog.
   Future<void> previewBook(List<Recipe> recipes, {required PdfLabels labels}) async {
-    if (_useSystemViewer) {
+    if (isDesktop) {
       final doc = await _buildBookDoc(recipes, PdfPageFormat.a4, labels);
       await _openInSystemViewer(doc, 'Recipy_Book');
     } else {
@@ -119,6 +128,12 @@ class PdfService {
         },
       );
     }
+  }
+
+  /// Returns the raw PDF bytes for the full recipe book without opening any viewer.
+  Future<Uint8List> buildBookPdfBytes(List<Recipe> recipes, {required PdfLabels labels}) async {
+    final doc = await _buildBookDoc(recipes, PdfPageFormat.a4, labels);
+    return doc.save();
   }
 
   /// Saves [doc] to a temp file and opens it in the default system PDF viewer.

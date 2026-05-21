@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/recipes/domain/recipe.dart';
@@ -43,7 +44,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.recipes,
-        builder: (context, state) => const RecipeListScreen(),
+        // Cross-fade from the loading screen instead of the default platform
+        // slide so the hand-off feels like a reveal rather than a navigation.
+        pageBuilder: (context, state) => CustomTransitionPage<void>(
+          key: state.pageKey,
+          child: const RecipeListScreen(),
+          transitionDuration: const Duration(milliseconds: 500),
+          transitionsBuilder: (context, animation, _, child) =>
+              FadeTransition(
+                opacity: CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeIn,
+                ),
+                child: child,
+              ),
+        ),
         routes: [
           // "new" must be declared before ":id" so GoRouter matches the
           // literal path segment before treating it as a parameter.

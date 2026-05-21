@@ -49,29 +49,108 @@ class RecipeDetailScreen extends ConsumerWidget {
     }
   }
 
-  /// Opens the system print/preview dialog for [recipe] as a PDF.
+  /// Builds a [PdfLabels] object from the current [AppLocalizations].
+  PdfLabels _pdfLabels(AppLocalizations l10n) => PdfLabels(
+    sectionIngredients: l10n.pdfSectionIngredients,
+    sectionSteps: l10n.pdfSectionSteps,
+    sectionNotes: l10n.pdfSectionNotes,
+    bookTitle: l10n.pdfBookTitle,
+    generatedBy: l10n.pdfGeneratedBy,
+    contents: l10n.pdfContents,
+    prepTime: (m) => l10n.pdfPrepTime(m),
+    serves: (c) => l10n.pdfServes(c),
+    pageOf: (p, t) => l10n.pdfPageOf(p, t),
+    recipeCount: (c) => l10n.pdfRecipeCount(c),
+    sourceLabel: (u) => l10n.pdfSourceLabel(u),
+  );
+
+  /// On desktop: opens the PDF directly in the system viewer.
+  /// On mobile: shows a bottom sheet so the user can choose to save or share.
   Future<void> _printPdf(BuildContext context, WidgetRef ref, Recipe recipe) async {
     final l10n = AppLocalizations.of(context)!;
-    try {
-      await ref.read(pdfServiceProvider).previewRecipe(recipe, labels: PdfLabels(
-        sectionIngredients: l10n.pdfSectionIngredients,
-        sectionSteps: l10n.pdfSectionSteps,
-        sectionNotes: l10n.pdfSectionNotes,
-        bookTitle: l10n.pdfBookTitle,
-        generatedBy: l10n.pdfGeneratedBy,
-        contents: l10n.pdfContents,
-        prepTime: (m) => l10n.pdfPrepTime(m),
-        serves: (c) => l10n.pdfServes(c),
-        pageOf: (p, t) => l10n.pdfPageOf(p, t),
-        recipeCount: (c) => l10n.pdfRecipeCount(c),
-        sourceLabel: (u) => l10n.pdfSourceLabel(u),
-      ));
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(AppLocalizations.of(context)!.pdfFailed(e.toString()))));
+    final service = ref.read(pdfServiceProvider);
+
+    // Desktop platforms open the PDF in the system viewer (Preview, Edge, etc.)
+    // so the existing flow is fine. Only mobile needs the action sheet.
+    if (service.isDesktop) {
+      try {
+        await service.previewRecipe(recipe, labels: _pdfLabels(l10n));
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.pdfFailed(e.toString()))),
+          );
+        }
       }
+      return;
     }
+
+    // Mobile: let the user decide between saving and sharing.
+    _showPdfSheet(context, ref, recipe);
+  }
+
+  /// Shows a bottom sheet with "Save to device" and "Share" options for the
+  /// [recipe] PDF. Only shown on mobile platforms.
+  void _showPdfSheet(BuildContext context, WidgetRef ref, Recipe recipe) {
+    final l10n = AppLocalizations.of(context)!;
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf_outlined),
+              title: Text(l10n.saveToDevice),
+              subtitle: Text(l10n.savePdfToDeviceSubtitle),
+              onTap: () async {
+                Navigator.of(ctx).pop();
+                try {
+                  // Opens the PDF in the system viewer (e.g. Android PDF viewer),
+                  // which lets the user save, print, or annotate from there.
+                  await ref.read(pdfServiceProvider).previewRecipe(
+                    recipe,
+                    labels: _pdfLabels(l10n),
+                  );
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(l10n.pdfFailed(e.toString()))),
+                    );
+                  }
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.share_outlined),
+              title: Text(l10n.shareViaApp),
+              subtitle: Text(l10n.shareViaAppSubtitle),
+              onTap: () async {
+                Navigator.of(ctx).pop();
+                try {
+                  final pdfService = ref.read(pdfServiceProvider);
+                  final bytes = await pdfService.buildRecipePdfBytes(
+                    recipe,
+                    labels: _pdfLabels(l10n),
+                  );
+                  final filename = pdfService.safeFilename(recipe.title);
+                  await ref
+                      .read(shareImportServiceProvider)
+                      .sharePdf(filename, bytes);
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(l10n.pdfFailed(e.toString()))),
+                    );
+                  }
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Shows a Save / Share bottom sheet for [recipe].

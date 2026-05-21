@@ -298,6 +298,9 @@
   "saveToDeviceSubtitle": "Save the .recipy file to your Downloads folder",
   "@saveToDeviceSubtitle": { "description": "Subtitle for the save to device option" },
 
+  "savePdfToDeviceSubtitle": "Open in the system PDF viewer",
+  "@savePdfToDeviceSubtitle": { "description": "Subtitle for the open-in-viewer option in the PDF export bottom sheet" },
+
   "shareViaApp": "Share via…",
   "@shareViaApp": { "description": "Export bottom sheet option to open the system share sheet" },
 

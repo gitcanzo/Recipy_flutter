@@ -85,6 +85,51 @@ class ShareImportService {
   }
 
   // ---------------------------------------------------------------------------
+  // Export — PDF — save to device
+  // ---------------------------------------------------------------------------
+
+  /// Saves [bytes] as a PDF file named [filename].pdf to the Downloads folder
+  /// on Android, or shows a native save dialog on desktop platforms.
+  ///
+  /// Returns the saved file path on success, or null if the user cancelled.
+  Future<String?> savePdfToDevice(String filename, Uint8List bytes) async {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      // On Android write directly to the public Downloads folder so the user
+      // can find the file in their file manager without any extra steps.
+      final dir = Directory('/storage/emulated/0/Download');
+      final base = dir.existsSync() ? dir : await getApplicationDocumentsDirectory();
+      final file = File(p.join(base.path, '$filename.pdf'));
+      await file.writeAsBytes(bytes, flush: true);
+      return file.path;
+    }
+    // Desktop (macOS, Windows, Linux): show a native save dialog so the user
+    // can choose where to put the file.
+    final savePath = await FilePicker.platform.saveFile(
+      dialogTitle: 'Save PDF',
+      fileName: '$filename.pdf',
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+    );
+    if (savePath == null) return null;
+    await File(savePath).writeAsBytes(bytes, flush: true);
+    return savePath;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Export — PDF — share sheet
+  // ---------------------------------------------------------------------------
+
+  /// Writes [bytes] to a temp file and opens the system share sheet so the
+  /// user can send the PDF via email, AirDrop, or any installed app.
+  Future<void> sharePdf(String filename, Uint8List bytes) async {
+    final file = await _writeTempBytes(filename: '$filename.pdf', bytes: bytes);
+    await Share.shareXFiles(
+      [XFile(file.path, mimeType: 'application/pdf')],
+      subject: filename,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Import — file picker
   // ---------------------------------------------------------------------------
 

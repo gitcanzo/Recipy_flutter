@@ -228,9 +228,26 @@ class _RecipeListScreenState extends ConsumerState<RecipeListScreen>
     );
   }
 
-  /// Generates a recipe book PDF from all [recipes] and opens the system
-  /// print / preview dialog.
-  Future<void> _exportPdfBook(List<Recipe> recipes) async {
+  /// Builds a [PdfLabels] object from the current [AppLocalizations].
+  PdfLabels _pdfLabels(AppLocalizations l10n) => PdfLabels(
+    sectionIngredients: l10n.pdfSectionIngredients,
+    sectionSteps: l10n.pdfSectionSteps,
+    sectionNotes: l10n.pdfSectionNotes,
+    bookTitle: l10n.pdfBookTitle,
+    generatedBy: l10n.pdfGeneratedBy,
+    contents: l10n.pdfContents,
+    prepTime: (m) => l10n.pdfPrepTime(m),
+    serves: (c) => l10n.pdfServes(c),
+    pageOf: (p, t) => l10n.pdfPageOf(p, t),
+    recipeCount: (c) => l10n.pdfRecipeCount(c),
+    sourceLabel: (u) => l10n.pdfSourceLabel(u),
+  );
+
+  /// Generates a PDF book for [recipes].
+  ///
+  /// On desktop: opens the PDF directly in the system viewer.
+  /// On mobile: shows a bottom sheet so the user can choose to save or share.
+  void _exportPdfBook(List<Recipe> recipes) {
     final l10n = AppLocalizations.of(context)!;
     if (recipes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -238,26 +255,88 @@ class _RecipeListScreenState extends ConsumerState<RecipeListScreen>
       );
       return;
     }
-    try {
-      await ref.read(pdfServiceProvider).previewBook(recipes, labels: PdfLabels(
-        sectionIngredients: l10n.pdfSectionIngredients,
-        sectionSteps: l10n.pdfSectionSteps,
-        sectionNotes: l10n.pdfSectionNotes,
-        bookTitle: l10n.pdfBookTitle,
-        generatedBy: l10n.pdfGeneratedBy,
-        contents: l10n.pdfContents,
-        prepTime: (m) => l10n.pdfPrepTime(m),
-        serves: (c) => l10n.pdfServes(c),
-        pageOf: (p, t) => l10n.pdfPageOf(p, t),
-        recipeCount: (c) => l10n.pdfRecipeCount(c),
-        sourceLabel: (u) => l10n.pdfSourceLabel(u),
-      ));
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(l10n.pdfFailed(e.toString()))));
-      }
+
+    final pdfService = ref.read(pdfServiceProvider);
+
+    // Desktop opens the system PDF viewer directly — no action sheet needed.
+    if (pdfService.isDesktop) {
+      pdfService
+          .previewBook(recipes, labels: _pdfLabels(l10n))
+          .catchError((Object e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.pdfFailed(e.toString()))),
+          );
+        }
+      });
+      return;
     }
+
+    // Mobile: let the user decide between saving and sharing the PDF book.
+    _showPdfBookSheet(recipes);
+  }
+
+  /// Shows a bottom sheet with "Save to device" and "Share" options for the
+  /// full recipe book PDF. Only shown on mobile platforms.
+  void _showPdfBookSheet(List<Recipe> recipes) {
+    final l10n = AppLocalizations.of(context)!;
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf_outlined),
+              title: Text(l10n.saveToDevice),
+              subtitle: Text(l10n.savePdfToDeviceSubtitle),
+              onTap: () async {
+                Navigator.of(ctx).pop();
+                try {
+                  // Opens the PDF in the system viewer (e.g. Android PDF viewer),
+                  // which lets the user save, print, or annotate from there.
+                  await ref.read(pdfServiceProvider).previewBook(
+                    recipes,
+                    labels: _pdfLabels(l10n),
+                  );
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(l10n.pdfFailed(e.toString()))),
+                    );
+                  }
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.share_outlined),
+              title: Text(l10n.shareViaApp),
+              subtitle: Text(l10n.shareViaAppSubtitle),
+              onTap: () async {
+                Navigator.of(ctx).pop();
+                try {
+                  final pdfService = ref.read(pdfServiceProvider);
+                  final bytes = await pdfService.buildBookPdfBytes(
+                    recipes,
+                    labels: _pdfLabels(l10n),
+                  );
+                  await ref
+                      .read(shareImportServiceProvider)
+                      .sharePdf('Recipy_Book', bytes);
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(l10n.pdfFailed(e.toString()))),
+                    );
+                  }
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Filters [incoming] against [existing], returning only recipes whose title

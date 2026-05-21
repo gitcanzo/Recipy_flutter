@@ -381,6 +381,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Save the .recipy file to your Downloads folder';
 
   @override
+  String get savePdfToDeviceSubtitle => 'Open in the system PDF viewer';
+
+  @override
   String get shareViaApp => 'Share via…';
 
   @override
