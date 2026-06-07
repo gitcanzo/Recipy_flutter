@@ -94,10 +94,11 @@ class ShareImportService {
   /// Returns the saved file path on success, or null if the user cancelled.
   Future<String?> savePdfToDevice(String filename, Uint8List bytes) async {
     if (defaultTargetPlatform == TargetPlatform.android) {
-      // On Android write directly to the public Downloads folder so the user
-      // can find the file in their file manager without any extra steps.
-      final dir = Directory('/storage/emulated/0/Download');
-      final base = dir.existsSync() ? dir : await getApplicationDocumentsDirectory();
+      // getDownloadsDirectory() uses the correct public Downloads folder on
+      // Android 10+ without requiring WRITE_EXTERNAL_STORAGE. Falls back to
+      // the app's private documents directory if Downloads is unavailable.
+      final base = await getDownloadsDirectory() ??
+          await getApplicationDocumentsDirectory();
       final file = File(p.join(base.path, '$filename.pdf'));
       await file.writeAsBytes(bytes, flush: true);
       return file.path;
@@ -306,8 +307,11 @@ class ShareImportService {
     required Uint8List bytes,
   }) async {
     if (defaultTargetPlatform == TargetPlatform.android) {
-      final dir = Directory('/storage/emulated/0/Download');
-      final base = dir.existsSync() ? dir : await getApplicationDocumentsDirectory();
+      // getDownloadsDirectory() uses the correct public Downloads folder on
+      // Android 10+ without requiring WRITE_EXTERNAL_STORAGE. Falls back to
+      // the app's private documents directory if Downloads is unavailable.
+      final base = await getDownloadsDirectory() ??
+          await getApplicationDocumentsDirectory();
       final file = File(p.join(base.path, filename));
       await file.writeAsBytes(bytes, flush: true);
       return file.path;
