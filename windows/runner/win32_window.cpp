@@ -7,6 +7,50 @@
 
 namespace {
 
+// Registry key used to persist window placement across sessions.
+constexpr const wchar_t kWindowPlacementRegKey[] =
+    L"Software\\com.gcanz\\Recipy\\WindowPlacement";
+
+// Saves the current window position and size to the registry so it can be
+// restored the next time the app launches.
+void SaveWindowPlacement(HWND hwnd) {
+  WINDOWPLACEMENT wp{};
+  wp.length = sizeof(wp);
+  if (!GetWindowPlacement(hwnd, &wp)) return;
+  // Only persist normal (restored) placement — ignore minimised/maximised so
+  // the window always opens at a sensible size.
+  if (wp.showCmd == SW_SHOWMINIMIZED) return;
+
+  HKEY key;
+  if (RegCreateKeyExW(HKEY_CURRENT_USER, kWindowPlacementRegKey, 0, nullptr,
+                      REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, nullptr, &key,
+                      nullptr) != ERROR_SUCCESS) {
+    return;
+  }
+  RegSetValueExW(key, L"placement", 0, REG_BINARY,
+                 reinterpret_cast<const BYTE*>(&wp), sizeof(wp));
+  RegCloseKey(key);
+}
+
+// Restores window placement from the registry. Returns true and sets |wp| if
+// a saved placement exists; otherwise returns false.
+bool LoadWindowPlacement(WINDOWPLACEMENT& wp) {
+  HKEY key;
+  if (RegOpenKeyExW(HKEY_CURRENT_USER, kWindowPlacementRegKey, 0, KEY_QUERY_VALUE,
+                    &key) != ERROR_SUCCESS) {
+    return false;
+  }
+  DWORD size = sizeof(wp);
+  bool ok = RegQueryValueExW(key, L"placement", nullptr, nullptr,
+                              reinterpret_cast<BYTE*>(&wp),
+                              &size) == ERROR_SUCCESS && size == sizeof(wp);
+  RegCloseKey(key);
+  wp.length = sizeof(wp);
+  // Never restore as minimised — open normally if that was the last state.
+  if (wp.showCmd == SW_SHOWMINIMIZED) wp.showCmd = SW_SHOWNORMAL;
+  return ok;
+}
+
 /// Window attribute that enables dark mode window decorations.
 ///
 /// Redefined in case the developer's machine has a Windows SDK older than
@@ -146,6 +190,13 @@ bool Win32Window::Create(const std::wstring& title,
 
   UpdateTheme(window);
 
+  // Restore the previous window placement if one was saved; otherwise the
+  // default origin/size passed by the caller is used.
+  WINDOWPLACEMENT wp{};
+  if (LoadWindowPlacement(wp)) {
+    SetWindowPlacement(window, &wp);
+  }
+
   return OnCreate();
 }
 
@@ -206,6 +257,11 @@ Win32Window::MessageHandler(HWND hwnd,
       }
       return 0;
     }
+
+    case WM_WINDOWPOSCHANGED:
+      // Persist size and position so they survive across sessions.
+      SaveWindowPlacement(hwnd);
+      break;
 
     case WM_ACTIVATE:
       if (child_content_ != nullptr) {
