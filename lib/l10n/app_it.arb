@@ -36,6 +36,8 @@
   "tooltipBack": "Indietro",
   "tooltipShare": "Condividi ricetta",
   "tooltipPdf": "Stampa / Salva PDF",
+  "viewModeList": "Passa alla vista lista",
+  "viewModeGrid": "Passa alla vista griglia",
   "tooltipEdit": "Modifica ricetta",
   "tooltipDelete": "Elimina ricetta",
   "sectionIngredients": "INGREDIENTI",

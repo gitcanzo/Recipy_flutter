@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 import '../../data/pdf_service.dart';
 import '../../data/recipe_repository.dart';
 import '../../data/share_import_service.dart';
+import '../../data/view_mode_provider.dart';
 import '../../domain/recipe.dart';
 import '../widgets/recipe_card.dart';
+import '../widgets/recipe_list_tile.dart';
 import '../../../../shared/widgets/empty_state.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -521,6 +523,18 @@ class _RecipeListScreenState extends ConsumerState<RecipeListScreen>
                   fit: BoxFit.contain,
                 ),
                 actions: [
+                  // Toggle between grid and list view.
+                  IconButton(
+                    icon: Icon(
+                      ref.watch(viewModeProvider) == RecipeViewMode.grid
+                          ? Icons.view_list_outlined
+                          : Icons.grid_view_outlined,
+                    ),
+                    tooltip: ref.watch(viewModeProvider) == RecipeViewMode.grid
+                        ? l10n.viewModeList
+                        : l10n.viewModeGrid,
+                    onPressed: () => ref.read(viewModeProvider.notifier).toggle(),
+                  ),
                   recipesAsync.maybeWhen(
                     data: (recipes) => PopupMenuButton<String>(
                       icon: const Icon(Icons.more_vert),
@@ -659,6 +673,30 @@ class _RecipeListScreenState extends ConsumerState<RecipeListScreen>
                       icon: Icons.search_off,
                       message: l10n.noResultsFor(_searchQuery),
                       subMessage: l10n.noResultsForSub,
+                    );
+                  }
+
+                  final viewMode = ref.watch(viewModeProvider);
+
+                  if (viewMode == RecipeViewMode.list) {
+                    return ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 96),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final recipe = filtered[index];
+                        final isSelected = _selectedIds.contains(recipe.id);
+                        return RecipeListTile(
+                          recipe: recipe,
+                          isSelected: isSelected,
+                          onTap: isSelecting
+                              ? () => _toggleSelection(recipe.id)
+                              : () => context.push(
+                                  '${AppRoutes.recipes}/${recipe.id}'),
+                          onLongPress: isSelecting
+                              ? null
+                              : () => _toggleSelection(recipe.id),
+                        );
+                      },
                     );
                   }
 

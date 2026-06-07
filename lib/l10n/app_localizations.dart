@@ -308,6 +308,18 @@ abstract class AppLocalizations {
   /// **'Print / Save PDF'**
   String get tooltipPdf;
 
+  /// Tooltip for the button that switches the recipe list to list view
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to list view'**
+  String get viewModeList;
+
+  /// Tooltip for the button that switches the recipe list to grid view
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to grid view'**
+  String get viewModeGrid;
+
   /// Tooltip for the edit button
   ///
   /// In en, this message translates to:

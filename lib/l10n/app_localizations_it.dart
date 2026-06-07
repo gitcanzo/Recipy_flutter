@@ -148,6 +148,12 @@ class AppLocalizationsIt extends AppLocalizations {
   String get tooltipPdf => 'Stampa / Salva PDF';
 
   @override
+  String get viewModeList => 'Passa alla vista lista';
+
+  @override
+  String get viewModeGrid => 'Passa alla vista griglia';
+
+  @override
   String get tooltipEdit => 'Modifica ricetta';
 
   @override

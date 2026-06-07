@@ -106,6 +106,12 @@
   "tooltipPdf": "Print / Save PDF",
   "@tooltipPdf": { "description": "Tooltip for the PDF button" },
 
+  "viewModeList": "Switch to list view",
+  "@viewModeList": { "description": "Tooltip for the button that switches the recipe list to list view" },
+
+  "viewModeGrid": "Switch to grid view",
+  "@viewModeGrid": { "description": "Tooltip for the button that switches the recipe list to grid view" },
+
   "tooltipEdit": "Edit recipe",
   "@tooltipEdit": { "description": "Tooltip for the edit button" },
 
